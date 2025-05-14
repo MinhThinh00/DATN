@@ -90,7 +90,7 @@ public class OrderController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            Pageable pageable = PageRequest.of(page, size, Sort.by("created_at").descending());
             Page<OrderDTO> orders = orderService.getOrdersByStoreId(storeId, pageable);
             
             Map<String, Object> response = new HashMap<>();

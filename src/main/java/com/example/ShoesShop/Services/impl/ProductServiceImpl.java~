@@ -567,75 +567,33 @@ public class ProductServiceImpl implements ProductService {
                 String variantSku = variantInput.getSku() + "-" + size;
 
                 // Kiểm tra SKU trùng lặp
-//                if (productVariantRepository.findBySku(variantSku).isPresent()) {
-//                    throw new IllegalArgumentException("SKU already exists: " + variantSku);
-//                }
-//
-//                // Tạo và lưu biến thể mới
-//                ProductVariant variant = new ProductVariant();
-//                variant.setName(variantName);
-//                variant.setSku(variantSku);
-//                variant.setPrice(variantInput.getPrice());
-//                variant.setImg(variantInput.getVariantImage());
-//                variant.setProduct(product);
-//                variant.setOptionMappings(new ArrayList<>());
-//                variant.setCartDetails(new ArrayList<>());
-//                variant.setOrderDetails(new ArrayList<>());
-//                variant = productVariantRepository.save(variant);
-//                product.getVariants().add(variant);
-//
-//                // Tạo và lưu thông tin tồn kho
-//                Inventory inventory = new Inventory();
-//                inventory.setQuantity(quantity);
-//                inventory.setStore(product.getStore());
-//                inventory.setVariant(variant);
-//                inventory = inventoryRepository.save(inventory);
-//                variant.setInventory(inventory);
-//
-//                // Liên kết biến thể với các option
-//                mapVariantToOptions(variant, List.of(productColorOption, productSizeOption));
-                //---------------------------------------//
-                ProductVariant variant;
-                Optional<ProductVariant> existingVariant = productVariantRepository.findBySku(variantSku);
-                if (existingVariant.isPresent()) {
-                    // Cập nhật biến thể hiện có
-                    System.out.println("Updating existing variant with SKU: " + variantSku);
-                    variant = existingVariant.get();
-                    variant.setName(variantName);
-                    variant.setPrice(variantInput.getPrice());
-                    variant.setImg(variantInput.getVariantImage());
-                    variant.setProduct(product);
-                    variant.getOptionMappings().clear(); // Xóa ánh xạ cũ
-                } else {
-                    // Tạo biến thể mới
-                    System.out.println("Creating new variant with SKU: " + variantSku);
-                    variant = new ProductVariant();
-                    variant.setName(variantName);
-                    variant.setSku(variantSku);
-                    variant.setPrice(variantInput.getPrice());
-                    variant.setImg(variantInput.getVariantImage());
-                    variant.setProduct(product);
-                    variant.setOptionMappings(new ArrayList<>());
-                    variant.setCartDetails(new ArrayList<>());
-                    variant.setOrderDetails(new ArrayList<>());
+                if (productVariantRepository.findBySku(variantSku).isPresent()) {
+                    throw new IllegalArgumentException("SKU already exists: " + variantSku);
                 }
+
+                // Tạo và lưu biến thể mới
+                ProductVariant variant = new ProductVariant();
+                variant.setName(variantName);
+                variant.setSku(variantSku);
+                variant.setPrice(variantInput.getPrice());
+                variant.setImg(variantInput.getVariantImage());
+                variant.setProduct(product);
+                variant.setOptionMappings(new ArrayList<>());
+                variant.setCartDetails(new ArrayList<>());
+                variant.setOrderDetails(new ArrayList<>());
                 variant = productVariantRepository.save(variant);
                 product.getVariants().add(variant);
 
-                // Cập nhật hoặc tạo Inventory
-                Inventory inventory = variant.getInventory();
-                if (inventory == null) {
-                    inventory = new Inventory();
-                    inventory.setStore(product.getStore());
-                    inventory.setVariant(variant);
-                }
+                // Tạo và lưu thông tin tồn kho
+                Inventory inventory = new Inventory();
                 inventory.setQuantity(quantity);
+                inventory.setStore(product.getStore());
+                inventory.setVariant(variant);
                 inventory = inventoryRepository.save(inventory);
                 variant.setInventory(inventory);
 
                 // Liên kết biến thể với các option
                 mapVariantToOptions(variant, List.of(productColorOption, productSizeOption));
-                System.out.println("Saved variant with SKU: " + variantSku);
             }
         }
     }
