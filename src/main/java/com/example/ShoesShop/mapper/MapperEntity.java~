@@ -1,0 +1,4 @@
+package com.example.ShoesShop.mapper;
+
+public interface MapperEntity {
+}

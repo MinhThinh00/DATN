@@ -1,0 +1,23 @@
+package com.example.ShoesShop.Entity;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
+@Getter
+@Setter
+@Entity
+public class Inventory {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private Integer quantity;
+
+    @ManyToOne
+    @JoinColumn(name = "store_id")
+    private Store store;
+
+    @OneToOne
+    @JoinColumn(name = "variant_id")
+    private ProductVariant variant;
+
+}

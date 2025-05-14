@@ -1,0 +1,19 @@
+package com.example.ShoesShop.Services;
+import com.example.ShoesShop.DTO.Auth.LoginDto;
+import com.example.ShoesShop.DTO.Auth.LoginResponse;
+import com.example.ShoesShop.DTO.Auth.RegisterDto;
+import com.example.ShoesShop.DTO.Auth.VerifyUserDto;
+import com.example.ShoesShop.Entity.User;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+
+
+public interface AuthService {
+    ResponseEntity<User> register(RegisterDto registerRequest);
+    ResponseEntity<String> verifyEmail(VerifyUserDto verifyUserDto);
+    LoginResponse login(LoginDto loginDto);
+
+    ResponseEntity<?> forgotPassword(String email);
+
+    LoginResponse loginWithGoogle(OAuth2AuthenticationToken token);
+}

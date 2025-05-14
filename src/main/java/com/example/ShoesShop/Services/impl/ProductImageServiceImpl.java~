@@ -1,0 +1,4 @@
+package com.example.ShoesShop.Services.impl;
+
+public class ProductImageServiceImpl {
+}

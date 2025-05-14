@@ -1,0 +1,34 @@
+package com.example.ShoesShop.Entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.ToString;
+
+import java.util.List;
+@Entity
+@Data
+@ToString(exclude = {"orders", "products", "staff", "inventories"})
+public class Store {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String address;
+    private String phone;
+    private String email;
+
+    @OneToMany(mappedBy = "store")
+    private List<Order> orders;
+
+    @OneToMany(mappedBy = "store", cascade = CascadeType.ALL)
+    private List<Product> products;
+
+    @OneToMany(mappedBy = "store")
+    private List<User> staff; // Nhân viên của cửa hàng
+
+    @OneToMany(mappedBy = "store", cascade = CascadeType.ALL)
+    private List<Inventory> inventories;
+
+}
+
+

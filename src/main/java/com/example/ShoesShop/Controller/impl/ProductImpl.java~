@@ -1,0 +1,48 @@
+package com.example.ShoesShop.Controller.impl;
+
+import com.example.ShoesShop.Controller.Api.ProductApi;
+import com.example.ShoesShop.DTO.ProductDTO;
+import com.example.ShoesShop.Services.Interface.ProductService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.awt.print.Pageable;
+
+@RestController
+public class ProductImpl implements ProductApi {
+    @Autowired
+    private final ProductService productService;
+
+    public ProductImpl(ProductService productService) {
+        this.productService = productService;
+    }
+
+    @Override
+    public ResponseEntity<Page<ProductDTO>> getAllProducts(Pageable pageable) {
+        Page<ProductDTO> productPage = productService.getAllProduct(pageable);
+        return ResponseEntity.ok(productPage);
+    }
+
+    @Override
+    public ResponseEntity<ProductDTO> getProductById(Long id) {
+        return ResponseEntity.ok().body(productService.getProductById(id));
+    }
+
+    @Override
+    public ResponseEntity<ProductDTO> addProduct(ProductDTO productDto) {
+        return ResponseEntity.ok(productService.createProduct(productDto));
+    }
+
+    @Override
+    public ResponseEntity<ProductDTO> update(ProductDTO productDto, Long id) {
+        return ResponseEntity.ok(productService.updateProduct(id, productDto));
+    }
+
+    @Override
+    public ResponseEntity<Void> delete(Long id) {
+        productService.deleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+}

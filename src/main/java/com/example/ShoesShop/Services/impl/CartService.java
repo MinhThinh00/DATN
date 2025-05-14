@@ -1,0 +1,251 @@
+package com.example.ShoesShop.Services.impl;
+
+
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.ShoesShop.DTO.CartDTO;
+import com.example.ShoesShop.DTO.CartDetailDTO;
+import com.example.ShoesShop.Entity.Cart;
+import com.example.ShoesShop.Entity.CartDetail;
+import com.example.ShoesShop.Entity.ProductImage;
+import com.example.ShoesShop.Entity.ProductVariant;
+import com.example.ShoesShop.Entity.User;
+import com.example.ShoesShop.Repository.CartDetailRepository;
+import com.example.ShoesShop.Repository.CartRepository;
+import com.example.ShoesShop.Repository.ProductVariantRepository;
+import com.example.ShoesShop.Repository.UserRepository;
+
+@Service
+public class CartService {
+
+    @Autowired
+    private CartRepository cartRepository;
+
+    @Autowired
+    private CartDetailRepository cartDetailRepository;
+
+    @Autowired
+    private ProductVariantRepository productVariantRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private InventoryService inventoryService;
+
+    public CartDTO getCartByUserId(Long userId) {
+        Optional<Cart> cartOptional = cartRepository.findByUserId(userId);
+
+        if (cartOptional.isPresent()) {
+            return convertToDTO(cartOptional.get());
+        } else {
+            // Tạo giỏ hàng mới nếu chưa có
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+
+            Cart newCart = new Cart();
+            newCart.setUser(user);
+            newCart.setTotalAmount(BigDecimal.ZERO);
+            newCart.setUpdatedAt(LocalDateTime.now());
+            newCart.setCartDetails(new ArrayList<>());
+
+            Cart savedCart = cartRepository.save(newCart);
+            return convertToDTO(savedCart);
+        }
+    }
+
+    @Transactional
+    public CartDTO addToCart(Long userId, Long variantId, Integer quantity) {
+        // Kiểm tra tồn kho
+        if (!inventoryService.checkInventory(variantId, quantity)) {
+            throw new RuntimeException("Not enough inventory for product variant: " + variantId);
+        }
+
+        // Lấy hoặc tạo giỏ hàng
+        Cart cart = cartRepository.findByUserId(userId)
+                .orElseGet(() -> {
+                    User user = userRepository.findById(userId)
+                            .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+
+                    Cart newCart = new Cart();
+                    newCart.setUser(user);
+                    newCart.setTotalAmount(BigDecimal.ZERO);
+                    newCart.setUpdatedAt(LocalDateTime.now());
+                    newCart.setCartDetails(new ArrayList<>());
+
+                    return cartRepository.save(newCart);
+                });
+
+        // Lấy thông tin variant
+        ProductVariant variant = productVariantRepository.findById(variantId)
+                .orElseThrow(() -> new RuntimeException("Product variant not found with id: " + variantId));
+
+        // Kiểm tra xem sản phẩm đã có trong giỏ hàng chưa
+        Optional<CartDetail> existingDetailOptional = cartDetailRepository.findByCartIdAndProductVariantId(cart.getId(), variantId);
+
+        CartDetail cartDetail;
+        if (existingDetailOptional.isPresent()) {
+            // Cập nhật số lượng nếu đã có
+            cartDetail = existingDetailOptional.get();
+            cartDetail.setQuantity(cartDetail.getQuantity() + quantity);
+        } else {
+            // Thêm mới nếu chưa có
+            cartDetail = new CartDetail();
+            cartDetail  .setCart(cart);
+            cartDetail.setProductVariant(variant);
+            cartDetail.setQuantity(quantity);
+        }
+
+        // Cập nhật giá
+        cartDetail.setUnitPrice(variant.getPrice());
+        cartDetail.setTotalPrice(variant.getPrice().multiply(BigDecimal.valueOf(cartDetail.getQuantity())));
+
+        cartDetailRepository.save(cartDetail);
+
+        // Cập nhật tổng giá giỏ hàng
+        updateCartTotal(cart);
+
+        return convertToDTO(cart);
+    }
+
+    @Transactional
+    public CartDTO updateCartItem(Long userId, Long cartDetailId, Integer quantity) {
+        CartDetail cartDetail = cartDetailRepository.findById(cartDetailId)
+                .orElseThrow(() -> new RuntimeException("Cart detail not found with id: " + cartDetailId));
+
+        Cart cart = cartDetail.getCart();
+
+        // Kiểm tra đúng user
+        if (!cart.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Cart does not belong to user with id: " + userId);
+        }
+
+        // Kiểm tra tồn kho
+        if (!inventoryService.checkInventory(cartDetail.getProductVariant().getId(), quantity)) {
+            throw new RuntimeException("Not enough inventory for product variant: " + cartDetail.getProductVariant().getId());
+        }
+
+        if (quantity <= 0) {
+            // Xóa item nếu số lượng <= 0
+            cartDetailRepository.deleteById(cartDetailId);
+        } else {
+            // Cập nhật số lượng
+            cartDetail.setQuantity(quantity);
+            cartDetail.setTotalPrice(cartDetail.getUnitPrice().multiply(BigDecimal.valueOf(quantity)));
+            cartDetailRepository.save(cartDetail);
+        }
+
+        // Cập nhật tổng giá giỏ hàng
+        updateCartTotal(cart);
+
+        return convertToDTO(cart);
+    }
+
+    @Transactional
+    public void removeCartItem(Long userId, Long cartDetailId) {
+        CartDetail cartDetail = cartDetailRepository.findById(cartDetailId)
+                .orElseThrow(() -> new RuntimeException("Cart detail not found with id: " + cartDetailId));
+
+        Cart cart = cartDetail.getCart();
+
+        // Kiểm tra đúng user
+        if (!cart.getUser().getId().equals(userId)) {
+            throw new RuntimeException("Cart does not belong to user with id: " + userId);
+        }
+
+        cartDetailRepository.deleteById(cartDetailId);
+
+        // Cập nhật tổng giá giỏ hàng
+        updateCartTotal(cart);
+    }
+
+    @Transactional
+    public void clearCart(Long userId) {
+        Cart cart = cartRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Cart not found for user with id: " + userId));
+
+        cartDetailRepository.deleteAllByCartId(cart.getId());
+
+        // Cập nhật tổng giá giỏ hàng
+        cart.setTotalAmount(BigDecimal.ZERO);
+        cart.setUpdatedAt(LocalDateTime.now());
+        cartRepository.save(cart);
+    }
+
+    private void updateCartTotal(Cart cart) {
+        List<CartDetail> cartDetails = cartDetailRepository.findByCartId(cart.getId());
+
+        BigDecimal total = cartDetails.stream()
+                .map(CartDetail::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        cart.setTotalAmount(total);
+        cart.setUpdatedAt(LocalDateTime.now());
+        cartRepository.save(cart);
+    }
+
+    private CartDTO convertToDTO(Cart cart) {
+        List<CartDetail> details = cartDetailRepository.findByCartId(cart.getId());
+
+        List<CartDetailDTO> detailDTOs = details.stream()
+                .map(detail -> {
+                    CartDetailDTO dto = new CartDetailDTO();
+                    dto.setId(detail.getId());
+                    dto.setCartId(cart.getId());
+                    dto.setVariantId(detail.getProductVariant().getId());
+                    dto.setVariantName(detail.getProductVariant().getName());
+                    dto.setProductName(detail.getProductVariant().getProduct().getName());
+
+                    // Lấy hình ảnh mặc định của variant hoặc sản phẩm
+                    String imageUrl = detail.getProductVariant().getImg();
+                    if (imageUrl == null || imageUrl.isEmpty()) {
+                        // Lấy hình ảnh mặc định của sản phẩm
+                        if (detail.getProductVariant().getProduct().getImages() != null && !detail.getProductVariant().getProduct().getImages().isEmpty()) {
+                            Optional<ProductImage> defaultImage = detail.getProductVariant().getProduct().getImages().stream()
+                                    .filter(ProductImage::isDefault)
+                                    .findFirst();
+
+                            if (defaultImage.isPresent()) {
+                                imageUrl = defaultImage.get().getImageURL();
+                            } else if (!detail.getProductVariant().getProduct().getImages().isEmpty()) {
+                                // Lấy hình đầu tiên nếu không có hình mặc định
+                                imageUrl = detail.getProductVariant().getProduct().getImages().get(0).getImageURL();
+                            }
+                        }
+                    }
+
+                    dto.setImageUrl(imageUrl);
+                    dto.setQuantity(detail.getQuantity());
+                    dto.setUnitPrice(detail.getUnitPrice());
+                    dto.setTotalPrice(detail.getTotalPrice());
+
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        CartDTO cartDTO = new CartDTO();
+        cartDTO.setId(cart.getId());
+        cartDTO.setUserId(cart.getUser().getId());
+        cartDTO.setItems(detailDTOs);
+        cartDTO.setTotalAmount(cart.getTotalAmount());
+        cartDTO.setUpdatedAt(cart.getUpdatedAt());
+        
+        // Calculate and set the total item count
+        int itemCount = details.stream()
+                .mapToInt(CartDetail::getQuantity)
+                .sum();
+        cartDTO.setItemCount(itemCount);
+
+        return cartDTO;
+    }
+}

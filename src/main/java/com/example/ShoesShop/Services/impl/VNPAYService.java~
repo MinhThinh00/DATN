@@ -1,0 +1,169 @@
+package com.example.ShoesShop.Services.impl;
+
+import com.example.ShoesShop.Config.VnpayConfig;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.stereotype.Service;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Service
+public class VNPAYService {
+    private static final Logger logger = LoggerFactory.getLogger(VNPAYService.class.getClass());
+
+    public String createOrder(HttpServletRequest request, int amount, String orderInfor, String urlReturn, String vnp_TxnRef){
+        try {
+            // có thể tham khảo tài liệu hướng dẫn và điều chỉnh các tham số
+            String vnp_Version = "2.1.0";
+            String vnp_Command = "pay";
+            //String vnp_TxnRef = VnpayConfig.getRandomNumber(8);
+            String vnp_IpAddr = VnpayConfig.getIpAddress(request);
+            String vnp_TmnCode = VnpayConfig.vnp_TmnCode;
+            String orderType = "other"; // Changed from "order-type" to "other" which is more standard
+
+            Map<String, String> vnp_Params = new HashMap<>();
+            vnp_Params.put("vnp_Version", vnp_Version);
+            vnp_Params.put("vnp_Command", vnp_Command);
+            vnp_Params.put("vnp_TmnCode", vnp_TmnCode);
+            vnp_Params.put("vnp_Amount", String.valueOf(amount*100));
+            vnp_Params.put("vnp_CurrCode", "VND");
+
+            vnp_Params.put("vnp_TxnRef", vnp_TxnRef);
+            vnp_Params.put("vnp_OrderInfo", URLEncoder.encode(orderInfor, StandardCharsets.UTF_8.toString()));
+            vnp_Params.put("vnp_OrderType", orderType);
+
+            String locate = "vn";
+            vnp_Params.put("vnp_Locale", locate);
+
+            // Make sure the return URL is properly formatted
+            if (!urlReturn.endsWith("/")) {
+                urlReturn += "/";
+            }
+            String returnUrl = urlReturn + VnpayConfig.vnp_Returnurl;
+            vnp_Params.put("vnp_ReturnUrl", returnUrl);
+            vnp_Params.put("vnp_IpAddr", vnp_IpAddr);
+
+            Calendar cld = Calendar.getInstance(TimeZone.getTimeZone("Etc/GMT+7"));
+            SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
+            String vnp_CreateDate = formatter.format(cld.getTime());
+            vnp_Params.put("vnp_CreateDate", vnp_CreateDate);
+
+            cld.add(Calendar.MINUTE, 15);
+            String vnp_ExpireDate = formatter.format(cld.getTime());
+            vnp_Params.put("vnp_ExpireDate", vnp_ExpireDate);
+
+            // Log the parameters for debugging
+            logger.info("VNPAY Parameters: {}", vnp_Params);
+
+            List<String> fieldNames = new ArrayList<>(vnp_Params.keySet());
+            Collections.sort(fieldNames);
+            StringBuilder hashData = new StringBuilder();
+            StringBuilder query = new StringBuilder();
+            Iterator<String> itr = fieldNames.iterator();
+            while (itr.hasNext()) {
+                String fieldName = itr.next();
+                String fieldValue = vnp_Params.get(fieldName);
+                if ((fieldValue != null) && (fieldValue.length() > 0)) {
+                    //Build hash data
+                    hashData.append(fieldName);
+                    hashData.append('=');
+                    try {
+                        hashData.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII.toString()));
+                        //Build query
+                        query.append(URLEncoder.encode(fieldName, StandardCharsets.US_ASCII.toString()));
+                        query.append('=');
+                        query.append(URLEncoder.encode(fieldValue, StandardCharsets.US_ASCII.toString()));
+                    } catch (UnsupportedEncodingException e) {
+                        logger.error("Error encoding VNPAY parameters", e);
+                        throw new RuntimeException("Error creating payment URL", e);
+                    }
+                    if (itr.hasNext()) {
+                        query.append('&');
+                        hashData.append('&');
+                    }
+
+                }
+            }
+            String queryUrl = query.toString();
+            String salt = VnpayConfig.vnp_HashSecret;
+            String vnp_SecureHash = VnpayConfig.hmacSHA512(salt, hashData.toString());
+            queryUrl += "&vnp_SecureHash=" + vnp_SecureHash;
+            String paymentUrl = VnpayConfig.vnp_PayUrl + "?" + queryUrl;
+            
+            logger.info("Generated VNPAY URL: {}", paymentUrl);
+            return paymentUrl;
+        } catch (Exception e) {
+            logger.error("Error creating VNPAY order", e);
+            throw new RuntimeException("Failed to create payment URL: " + e.getMessage(), e);
+        }
+    }
+
+    public int orderReturn(HttpServletRequest request){
+        try {
+            Map<String, String> fields = new HashMap<>();
+            for (Enumeration<String> params = request.getParameterNames(); params.hasMoreElements();) {
+//                String fieldName = params.nextElement();
+//                String fieldValue = request.getParameter(fieldName);
+                fieldName = URLEncoder.encode((String) params.nextElement(), StandardCharsets.US_ASCII.toString());
+                fieldValue = URLEncoder.encode(request.getParameter(fieldName), StandardCharsets.US_ASCII.toString());
+                if ((fieldValue != null) && (fieldValue.length() > 0)) {
+                    fields.put(fieldName, fieldValue);
+                }
+            }
+
+            // Log the received parameters
+            logger.info("VNPAY Return Parameters: {}", fields);
+
+            String vnp_SecureHash = request.getParameter("vnp_SecureHash");
+            if (fields.containsKey("vnp_SecureHashType")) {
+                fields.remove("vnp_SecureHashType");
+            }
+            if (fields.containsKey("vnp_SecureHash")) {
+                fields.remove("vnp_SecureHash");
+            }
+            String signValue = VnpayConfig.hashAllFields(fields);
+            
+            logger.info("Calculated hash: {}, Received hash: {}", signValue, vnp_SecureHash);
+            
+            if (signValue.equals(vnp_SecureHash)) {
+                if ("00".equals(request.getParameter("vnp_ResponseCode"))) {
+                    logger.info("VNPAY payment successful");
+                    return 1; // Success
+                } else {
+                    logger.warn("VNPAY payment failed with response code: {}", request.getParameter("vnp_ResponseCode"));
+                    return 0; // Failed
+                }
+            } else {
+                logger.error("VNPAY hash verification failed");
+                return -1; // Invalid signature
+            }
+        } catch (Exception e) {
+            logger.error("Error processing VNPAY return", e);
+            return -1;
+        }
+    }
+
+    // Add a method to get transaction details
+    public Map<String, String> getTransactionDetails(HttpServletRequest request) {
+        Map<String, String> details = new HashMap<>();
+        
+        details.put("vnp_Amount", request.getParameter("vnp_Amount"));
+        details.put("vnp_BankCode", request.getParameter("vnp_BankCode"));
+        details.put("vnp_BankTranNo", request.getParameter("vnp_BankTranNo"));
+        details.put("vnp_CardType", request.getParameter("vnp_CardType"));
+        details.put("vnp_OrderInfo", request.getParameter("vnp_OrderInfo"));
+        details.put("vnp_PayDate", request.getParameter("vnp_PayDate"));
+        details.put("vnp_ResponseCode", request.getParameter("vnp_ResponseCode"));
+        details.put("vnp_TmnCode", request.getParameter("vnp_TmnCode"));
+        details.put("vnp_TransactionNo", request.getParameter("vnp_TransactionNo"));
+        details.put("vnp_TransactionStatus", request.getParameter("vnp_TransactionStatus"));
+        details.put("vnp_TxnRef", request.getParameter("vnp_TxnRef"));
+        
+        return details;
+    }
+}
