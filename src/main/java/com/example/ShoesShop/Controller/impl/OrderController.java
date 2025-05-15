@@ -29,6 +29,7 @@ public class OrderController {
     @Autowired
     private OrderService orderService;
 
+
     @PostMapping
     public ResponseEntity<ApiResponse> createOrder(@RequestBody OrderRequestDTO orderRequest, @RequestParam Long userId) {
         try {
@@ -68,7 +69,7 @@ public class OrderController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
             Page<OrderDTO> orders = orderService.getOrdersByUserId(userId, pageable);
             
             Map<String, Object> response = new HashMap<>();
@@ -90,7 +91,7 @@ public class OrderController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by("created_at").descending());
+            Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
             Page<OrderDTO> orders = orderService.getOrdersByStoreId(storeId, pageable);
             
             Map<String, Object> response = new HashMap<>();

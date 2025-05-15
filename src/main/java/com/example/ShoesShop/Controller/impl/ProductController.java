@@ -8,6 +8,7 @@ import com.example.ShoesShop.Enum.GroupType;
 import com.example.ShoesShop.Services.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -15,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -150,5 +152,44 @@ public class ProductController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse(false, "Failed to add product to group: " + e.getMessage(), null));
         }
+    }
+
+    @GetMapping("/store/{storeId}/search")
+    public ResponseEntity<ApiResponse> getProductSearch(
+        @PathVariable Long storeId,
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) String type,
+        @RequestParam(required = false) BigDecimal minPrice,
+        @RequestParam(required = false) BigDecimal maxPrice,
+        @RequestParam(required = false, defaultValue = "id-asc") String sort,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "10") int size) {
+            String sortField = "id";
+            Sort.Direction direction = Sort.Direction.ASC;
+
+            if (sort != null && !sort.isEmpty()) {
+                String[] sortParams = sort.split("-");
+                if (sortParams.length > 0) {
+                    sortField = sortParams[0];
+                    if (sortParams.length > 1 && "desc".equalsIgnoreCase(sortParams[1])) {
+                        direction = Sort.Direction.DESC;
+                    }
+                }
+            }
+
+            Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
+
+        Page<Product> products = productService.getProductSearch(storeId, search,type,minPrice,maxPrice,pageable);
+        List<ProductDTO> productDTOs = products.getContent().stream()
+                .map(product -> productService.getProductDetails(product.getId()))
+                .collect(Collectors.toList());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("products", productDTOs);
+            response.put("currentPage", products.getNumber());
+            response.put("totalItems", products.getTotalElements());
+            response.put("totalPages", products.getTotalPages());
+
+            return ResponseEntity.ok(new ApiResponse(true, "Products retrieved successfully", response));
     }
 }

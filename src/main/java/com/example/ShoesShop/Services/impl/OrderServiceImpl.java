@@ -8,12 +8,15 @@ import com.example.ShoesShop.Enum.PaymentMethod;
 import com.example.ShoesShop.Enum.PaymentStatus;
 import com.example.ShoesShop.Repository.*;
 import com.example.ShoesShop.Services.OrderService;
+import com.example.ShoesShop.Services.SendEmailService;
+import jakarta.mail.MessagingException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -23,6 +26,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class OrderServiceImpl implements OrderService {
+
+    @Autowired
+    private SendEmailService sendEmailService;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -50,116 +56,123 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public Order createOrder(OrderRequestDTO orderRequest, Long userId) {
-        // Find the user
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new NoSuchElementException("User not found with ID: " + userId));
-        
-        // Find the store
-        Store store = storeRepository.findById(orderRequest.getStoreId())
-                .orElseThrow(() -> new NoSuchElementException("Store not found with ID: " + orderRequest.getStoreId()));
-        
-        // Create or update address
-        Address address = new Address();
-        address.setUser(user);
-        address.setPhone(orderRequest.getPhone());
-        address.setDefault(false);
-        address.setAddress(orderRequest.getAddress());
-        address = addressRepository.save(address);
-        
-        // Create order
-        Order order = new Order();
-        order.setUser(user);
-        order.setStore(store); // Set the store directly from the request
-        
-        order.setTotalPrice(orderRequest.getTotalAmount());
-        order.setTotalQuantity(orderRequest.getItems().stream()
-                .mapToInt(OrderItemDTO::getQuantity)
-                .sum());
-        order.setStatus(OrderStatus.PENDING);
-        order.setCreatedAt(LocalDateTime.now());
-        order.setUpdatedAt(LocalDateTime.now());
-        order.setShippingAddress(address);
-        
-        // Save order to get ID
-        order = orderRepository.save(order);
-        
-        // Create order details and check inventory
-        List<OrderDetail> orderDetails = new ArrayList<>();
-        for (OrderItemDTO item : orderRequest.getItems()) {
-            OrderDetail detail = new OrderDetail();
-            detail.setOrder(order);
-            
-            ProductVariant variant = productVariantRepository.findById(item.getVariantId())
-                    .orElseThrow(() -> new NoSuchElementException("Product variant not found with ID: " + item.getVariantId()));
-            
-            // Check if the product is available in the specified store
-            Inventory inventory = inventoryRepository.findByVariantIdAndStoreId(variant.getId(), store.getId())
-                    .orElseThrow(() -> new RuntimeException("Product " + variant.getProduct().getName() + 
-                            " (" + variant.getName() + ") is not available in the selected store"));
-            
-            // Check if there's enough stock
-            if (inventory.getQuantity() < item.getQuantity()) {
-                throw new RuntimeException("Not enough stock for product " + variant.getProduct().getName() + 
-                        " (" + variant.getName() + "). Available: " + inventory.getQuantity() + 
-                        ", Requested: " + item.getQuantity());
+    public Order createOrder(OrderRequestDTO orderRequest, Long userId)  {
+        try {
+
+
+            // Find the user
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new NoSuchElementException("User not found with ID: " + userId));
+
+            // Find the store
+            Store store = storeRepository.findById(orderRequest.getStoreId())
+                    .orElseThrow(() -> new NoSuchElementException("Store not found with ID: " + orderRequest.getStoreId()));
+
+            // Create or update address
+            Address address = new Address();
+            address.setUser(user);
+            address.setPhone(orderRequest.getPhone());
+            address.setDefault(false);
+            address.setAddress(orderRequest.getAddress());
+            address = addressRepository.save(address);
+
+            // Create order
+            Order order = new Order();
+            order.setUser(user);
+            order.setStore(store); // Set the store directly from the request
+
+            order.setTotalPrice(orderRequest.getTotalAmount());
+            order.setTotalQuantity(orderRequest.getItems().stream()
+                    .mapToInt(OrderItemDTO::getQuantity)
+                    .sum());
+            order.setStatus(OrderStatus.PENDING);
+            order.setCreatedAt(LocalDateTime.now());
+            order.setUpdatedAt(LocalDateTime.now());
+            order.setShippingAddress(address);
+
+            // Save order to get ID
+            order = orderRepository.save(order);
+
+            // Create order details and check inventory
+            List<OrderDetail> orderDetails = new ArrayList<>();
+            for (OrderItemDTO item : orderRequest.getItems()) {
+                OrderDetail detail = new OrderDetail();
+                detail.setOrder(order);
+
+                ProductVariant variant = productVariantRepository.findById(item.getVariantId())
+                        .orElseThrow(() -> new NoSuchElementException("Product variant not found with ID: " + item.getVariantId()));
+
+                // Check if the product is available in the specified store
+                Inventory inventory = inventoryRepository.findByVariantIdAndStoreId(variant.getId(), store.getId())
+                        .orElseThrow(() -> new RuntimeException("Product " + variant.getProduct().getName() +
+                                " (" + variant.getName() + ") is not available in the selected store"));
+
+                // Check if there's enough stock
+                if (inventory.getQuantity() < item.getQuantity()) {
+                    throw new RuntimeException("Not enough stock for product " + variant.getProduct().getName() +
+                            " (" + variant.getName() + "). Available: " + inventory.getQuantity() +
+                            ", Requested: " + item.getQuantity());
+                }
+
+                // Update inventory
+                inventory.setQuantity(inventory.getQuantity() - item.getQuantity());
+                inventoryRepository.save(inventory);
+
+                detail.setProductVariant(variant);
+                detail.setQuantity(item.getQuantity());
+                detail.setUnitPrice(item.getPrice());
+                detail.setTotalPrice(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+                orderDetails.add(detail);
             }
-            
-            // Update inventory
-            inventory.setQuantity(inventory.getQuantity() - item.getQuantity());
-            inventoryRepository.save(inventory);
-            
-            detail.setProductVariant(variant);
-            detail.setQuantity(item.getQuantity());
-            detail.setUnitPrice(item.getPrice());
-            detail.setTotalPrice(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
-            orderDetails.add(detail);
-        }
-        
-        order.setOrderDetails(orderDetails);
-        
-        // Create payment
-        Payment payment = new Payment();
-        payment.setOrder(order);
-        payment.setAmount(orderRequest.getTotalAmount());
-        
-        if ("cod".equalsIgnoreCase(orderRequest.getPaymentMethod())) {
-            payment.setPaymentMethod(String.valueOf(PaymentMethod.COD));
-            payment.setStatus(PaymentStatus.PENDING);
-        } else if ("vnpay".equalsIgnoreCase(orderRequest.getPaymentMethod())) {
-            payment.setPaymentMethod(String.valueOf(PaymentMethod.VNPAY));
-            payment.setStatus(PaymentStatus.PENDING);
-            payment.setTransactionId(vnpayConfig.getRandomNumber(8));
-        }
-        
-        payment.setCreatedAt(LocalDateTime.now());
-        payment.setUpdatedAt(LocalDateTime.now());
-        
-        order.setPayment(payment);
-        
-        // Save the complete order
-        order = orderRepository.save(order);
-        
-        // Only clear cart items if they were ordered from the cart
-        if (orderRequest.isFromCart()) {
-            List<Long> cartItemIds = orderRequest.getItems().stream()
-                    .filter(item -> item.getId() != null) // Filter out items without cart IDs
-                    .map(OrderItemDTO::getId)
-                    .toList();
-            
-            if (!cartItemIds.isEmpty()) {
-                for (Long cartItemId : cartItemIds) {
-                    try {
-                        cartService.removeCartItem(userId, cartItemId);
-                    } catch (Exception e) {
-                        // Log the error but continue with the order
-                        System.err.println("Failed to remove cart item " + cartItemId + ": " + e.getMessage());
+
+            order.setOrderDetails(orderDetails);
+
+            // Create payment
+            Payment payment = new Payment();
+            payment.setOrder(order);
+            payment.setAmount(orderRequest.getTotalAmount());
+
+            if ("cod".equalsIgnoreCase(orderRequest.getPaymentMethod())) {
+                payment.setPaymentMethod(String.valueOf(PaymentMethod.COD));
+                payment.setStatus(PaymentStatus.PENDING);
+            } else if ("vnpay".equalsIgnoreCase(orderRequest.getPaymentMethod())) {
+                payment.setPaymentMethod(String.valueOf(PaymentMethod.VNPAY));
+                payment.setStatus(PaymentStatus.PENDING);
+                payment.setTransactionId(vnpayConfig.getRandomNumber(8));
+                order.setStatus(OrderStatus.PROCESSING);
+            }
+
+            payment.setCreatedAt(LocalDateTime.now());
+            payment.setUpdatedAt(LocalDateTime.now());
+
+            order.setPayment(payment);
+
+            // Save the complete order
+            order = orderRepository.save(order);
+
+            // Only clear cart items if they were ordered from the cart
+            if (orderRequest.isFromCart()) {
+                List<Long> cartItemIds = orderRequest.getItems().stream()
+                        .filter(item -> item.getId() != null) // Filter out items without cart IDs
+                        .map(OrderItemDTO::getId)
+                        .toList();
+
+                if (!cartItemIds.isEmpty()) {
+                    for (Long cartItemId : cartItemIds) {
+                        try {
+                            cartService.removeCartItem(userId, cartItemId);
+                        } catch (Exception e) {
+                            // Log the error but continue with the order
+                            System.err.println("Failed to remove cart item " + cartItemId + ": " + e.getMessage());
+                        }
                     }
                 }
             }
+            sendEmailService.sendOrderConfirmationEmail(order);
+            return order;
+        }catch (Exception e) {
+            throw  new RuntimeException(e);
         }
-        
-        return order;
     }
 
     @Override

@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -649,5 +650,10 @@ public class ProductServiceImpl implements ProductService {
             variant.getOptionMappings().add(mapping);
             productOption.getVariantMappings().add(mapping);
         }
+    }
+
+    @Override
+    public Page<Product> getProductSearch(Long storeId, String search, String type, BigDecimal minPrice, BigDecimal maxPrice, Pageable pageable) {
+        return productRepository.findProductsWithFilters(storeId,search, type, minPrice, maxPrice,pageable);
     }
 }
