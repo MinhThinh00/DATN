@@ -157,6 +157,7 @@ public class ProductController {
     @GetMapping("/store/{storeId}/search")
     public ResponseEntity<ApiResponse> getProductSearch(
         @PathVariable Long storeId,
+        @RequestParam(required = false) GroupType group,
         @RequestParam(required = false) String search,
         @RequestParam(required = false) String type,
         @RequestParam(required = false) BigDecimal minPrice,
@@ -179,7 +180,7 @@ public class ProductController {
 
             Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortField));
 
-        Page<Product> products = productService.getProductSearch(storeId, search,type,minPrice,maxPrice,pageable);
+        Page<Product> products = productService.getProductSearch(storeId,group, search,type,minPrice,maxPrice,pageable);
         List<ProductDTO> productDTOs = products.getContent().stream()
                 .map(product -> productService.getProductDetails(product.getId()))
                 .collect(Collectors.toList());

@@ -10,22 +10,28 @@ import com.example.ShoesShop.Repository.*;
 import com.example.ShoesShop.Services.OrderService;
 import com.example.ShoesShop.Services.SendEmailService;
 import jakarta.mail.MessagingException;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class OrderServiceImpl implements OrderService {
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Autowired
     private SendEmailService sendEmailService;
@@ -248,7 +254,66 @@ public class OrderServiceImpl implements OrderService {
     public void deleteOrder(Long orderId) {
         orderRepository.findAndDeleteById(orderId).orElseThrow(() -> new NoSuchElementException("Order not found with ID: " + orderId));
     }
-    
+
+    @Override
+    public Page<OrderDTO> getOrdersByFilter(Long storeId, LocalDateTime startDate, LocalDateTime endDate, OrderStatus orderStatus, Pageable pageable) {
+//        Page<Order> orderPage = orderRepository.findByFilter(storeId, startDate, endDate, orderStatus, pageable);
+//        return orderPage.map(this::convertToDTO);
+
+        StringBuilder sql = new StringBuilder("SELECT * FROM orders o WHERE o.store_id = :storeId");
+        StringBuilder countSql = new StringBuilder("SELECT COUNT(*) FROM orders o WHERE o.store_id = :storeId");
+        Map<String, Object> params = new HashMap<>();
+        params.put("storeId", storeId);
+
+        // Thêm điều kiện startDate nếu không null
+        if (startDate != null) {
+            sql.append(" AND o.created_at >= :startDate");
+            countSql.append(" AND o.created_at >= :startDate");
+            params.put("startDate", startDate);
+        }
+
+        // Thêm điều kiện endDate nếu không null
+        if (endDate != null) {
+            sql.append(" AND o.created_at <= :endDate");
+            countSql.append(" AND o.created_at <= :endDate");
+            params.put("endDate", endDate);
+        }
+
+        // Thêm điều kiện status nếu không null
+        if (orderStatus != null) {
+            sql.append(" AND o.status = :status");
+            countSql.append(" AND o.status = :status");
+            params.put("status", orderStatus.name());
+        }
+
+        // Thêm ORDER BY
+        sql.append(" ORDER BY o.created_at DESC");
+
+        // Tạo query
+        Query query = entityManager.createNativeQuery(sql.toString(), Order.class);
+        Query countQuery = entityManager.createNativeQuery(countSql.toString());
+
+        // Gán tham số
+        for (Map.Entry<String, Object> param : params.entrySet()) {
+            query.setParameter(param.getKey(), param.getValue());
+            countQuery.setParameter(param.getKey(), param.getValue());
+        }
+
+        // Phân trang
+        query.setFirstResult((int) pageable.getOffset());
+        query.setMaxResults(pageable.getPageSize());
+
+        // Lấy danh sách kết quả
+        @SuppressWarnings("unchecked")
+        List<OrderDTO> orders = (List<OrderDTO>) query.getResultList().stream().map((Function<Order, OrderDTO>)  this::convertToDTO).collect(Collectors.toList());
+
+        // Lấy tổng số bản ghi
+        Long total = ((Number) countQuery.getSingleResult()).longValue();
+
+        // Trả về Page
+        return new PageImpl<>(orders, pageable, total);
+    }
+
     // Helper method to convert Order to OrderDTO
     private OrderDTO convertToDTO(Order order) {
         OrderDTO dto = new OrderDTO();

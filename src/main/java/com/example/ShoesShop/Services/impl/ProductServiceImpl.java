@@ -653,7 +653,7 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public Page<Product> getProductSearch(Long storeId, String search, String type, BigDecimal minPrice, BigDecimal maxPrice, Pageable pageable) {
-        return productRepository.findProductsWithFilters(storeId,search, type, minPrice, maxPrice,pageable);
+    public Page<Product> getProductSearch(Long storeId,GroupType groupType, String search, String type, BigDecimal minPrice, BigDecimal maxPrice, Pageable pageable) {
+        return productRepository.searchProductsFilte(storeId,groupType, search, type, minPrice, maxPrice,pageable);
     }
 }
