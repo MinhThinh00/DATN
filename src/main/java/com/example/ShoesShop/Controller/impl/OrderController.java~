@@ -206,11 +206,9 @@ public class OrderController {
                 }
             }
 
-            if (startDate != null && endDate != null) {
-                if (startDate.isAfter(endDate)) {
-                    return ResponseEntity.badRequest().body(
-                            new ApiResponse(false, "Ngày bắt đầu phải trước ngày kết thúc", null));
-                }
+            if (startDate.isAfter(endDate)) {
+                return ResponseEntity.badRequest().body(
+                        new ApiResponse(false, "Start date must be before end date", null));
             }
 
 

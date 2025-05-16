@@ -30,8 +30,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findAndDeleteById(Long orderId);
 
     @Query("SELECT o FROM Order o WHERE o.store.id = :storeId " +
-            "AND (:startDate IS NULL OR o.createdAt >= :startDate) " +
-            "AND (:endDate IS NULL OR o.createdAt <= :endDate) " +
+            "AND o.createdAt BETWEEN :startDate AND :endDate " +
             "AND (:status IS NULL OR o.status = :status)")
     Page<Order> findByFilter(
             @Param("storeId") Long storeId,

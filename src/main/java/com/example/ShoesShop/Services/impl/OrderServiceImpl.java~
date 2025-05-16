@@ -239,8 +239,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Page<OrderDTO> getOrdersByFilter(Long storeId, LocalDateTime startDate, LocalDateTime endDate, OrderStatus orderStatus, Pageable pageable) {
-        Page<Order> orderPage = orderRepository.findByFilter(storeId, startDate, endDate, orderStatus, pageable);
-        return orderPage.map(this::convertToDTO);
+        return (Page<OrderDTO>) orderRepository.findByFilter(storeId, startDate, endDate, orderStatus, pageable).stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 
     // Helper method to convert Order to OrderDTO
