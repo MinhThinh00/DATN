@@ -11,6 +11,11 @@ public class Discount {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
+
+    @Column(unique = true, nullable = false)
+    private String code;
+    private Long quantity;
+
     private Double discountPercentage;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
@@ -18,5 +23,14 @@ public class Discount {
 
     @OneToMany(mappedBy = "discount")
     private List<ProductDiscount> productDiscounts;
+
+    public void setIsActive(boolean isActive) {
+        this.isActive = isActive;
+    }
+
+    public boolean getIsActive() {
+        return isActive;
+    }
+
 
 }

@@ -51,6 +51,7 @@ public class UserServiceImpl {
         userDto.setCreateAt(user.getCreate_at());
         userDto.setIsActive(user.getIsActive());
         userDto.setImg(user.getImg());
+
         userDto.setRoleName(user.getRole().getRoleName());
         return userDto;
     }
@@ -120,6 +121,16 @@ public class UserServiceImpl {
     public Page<UserDto> getStaff(Pageable pageable) {
 
         Page<User> users = userRepository.findByRole(pageable);
+        return users.map(this::convertToDto);
+    }
+
+    public Page<UserDto> getAllUsers(Pageable pageable) {
+        Page<User> users = userRepository.findCustomer(pageable);
+        return users.map(this::convertToDto);
+    }
+
+    public Page<UserDto> getByFilter(String name, RoleName roleName, Pageable pageable) {
+        Page<User> users = userRepository.findByFilter(name, roleName, pageable);
         return users.map(this::convertToDto);
     }
 }

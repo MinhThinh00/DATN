@@ -5,6 +5,7 @@ import com.example.ShoesShop.DTO.Auth.StaffDto;
 import com.example.ShoesShop.DTO.Auth.UserDto;
 import com.example.ShoesShop.DTO.OrderDTO;
 import com.example.ShoesShop.DTO.response.ApiResponse;
+import com.example.ShoesShop.Enum.RoleName;
 import com.example.ShoesShop.Services.impl.UserServiceImpl;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,7 +28,7 @@ public class UserController {
         this.userService = userService;
     }
 
-    @GetMapping
+    @GetMapping("/{id}")
     public ResponseEntity<UserDto> getUserById(@PathVariable Long id) {
         return ResponseEntity.ok().body(userService.getUserById(id));
     }
@@ -72,6 +73,54 @@ public class UserController {
             response.put("totalItems", staff.getTotalElements());
             response.put("totalPages", staff.getTotalPages());
 
+            return ResponseEntity.ok(new ApiResponse(true, "successfully", response));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, e.getMessage(), null));
+        }
+    }
+
+
+    @GetMapping()
+    public ResponseEntity<ApiResponse> getAllUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "3") int size) {
+        try {
+            Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
+
+            Page<UserDto> users = userService.getAllUsers(pageable);
+
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("users", users.getContent());
+            response.put("currentPage", users.getNumber());
+            response.put("totalItems", users.getTotalElements());
+            response.put("totalPages", users.getTotalPages());
+
+            return ResponseEntity.ok(new ApiResponse(true, "successfully", response));
+
+        }catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, e.getMessage(), null));
+        }
+    }
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse> searchUser(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) RoleName role,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "2") int size
+
+
+    ) {
+        try {
+            Pageable pageable = PageRequest.of(0, 10, Sort.by("id").descending());
+            Page<UserDto> users = userService.getByFilter(name  , role, pageable);
+            Map<String, Object> response = new HashMap<>();
+            response.put("users", users.getContent());
+            response.put("currentPage", users.getNumber());
+            response.put("totalItems", users.getTotalElements());
+            response.put("totalPages", users.getTotalPages());
             return ResponseEntity.ok(new ApiResponse(true, "successfully", response));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

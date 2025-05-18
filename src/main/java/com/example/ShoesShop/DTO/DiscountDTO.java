@@ -6,10 +6,14 @@ import java.time.LocalDateTime;
 public class DiscountDTO {
     private Long id;
     private String name;
+
+    private String code;
+    private Long quantity;
+
     private Double discountPercentage;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private boolean isActive;
-    private int productCount;
+    //private int productCount;
 
 }
