@@ -13,7 +13,6 @@ import java.math.BigDecimal;
 public class TopProductDTO {
     private Long productId;
     private String productName;
-    private String img;
 //    private Long variantId;
 //    private String variantName;
     private Integer totalQuantitySold;

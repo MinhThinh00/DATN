@@ -181,13 +181,10 @@ public class ReportServiceImpl {
                     .map(entry -> {
                         Product product = entry.getKey();
                         ProductStats stats = entry.getValue();
-                        String imgUrl = product.getImages() != null && !product.getImages().isEmpty()
-                                ? product.getImages().get(0).getImageURL()
-                                : null;
                         return new  TopProductDTO(
                                 product.getId(),
                                 product.getName(),
-                                imgUrl,
+                                product.getImage[0](),
                                 stats.quantity,
                                 stats.revenue
                         );

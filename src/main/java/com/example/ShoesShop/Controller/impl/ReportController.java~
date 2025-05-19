@@ -32,7 +32,7 @@ public class ReportController {
     }
     // Báo cáo top 10 sản phẩm bán chạy
     @GetMapping("/top-products/{month}/{year}")
-    public Map<String, List<Map<String, List<TopProductDTO>>>> getTopProducts(
+    public Map<String, List<TopProductDTO>> getTopProducts(
             @PathVariable int month, @PathVariable int year) {
         return reportService.getTopProducts(month, year);
     }
