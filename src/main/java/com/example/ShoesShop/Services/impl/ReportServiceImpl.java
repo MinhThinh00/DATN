@@ -1,0 +1,161 @@
+package com.example.ShoesShop.Services.impl;
+
+
+import com.example.ShoesShop.DTO.Report.CategoryRevenueDTO;
+import com.example.ShoesShop.DTO.Report.TopProductDTO;
+import com.example.ShoesShop.Entity.*;
+import org.springframework.stereotype.Service;
+
+import com.example.ShoesShop.DTO.Report.MonthlyRevenueDTO;
+import com.example.ShoesShop.Repository.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+public class ReportServiceImpl {
+
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    public Map<String, List<MonthlyRevenueDTO>> getRevenueByYear(int year) {
+        // Lấy danh sách đơn hàng trong năm
+        LocalDateTime startOfYear = LocalDateTime.of(year, 1, 1, 0, 0);
+        LocalDateTime endOfYear = LocalDateTime.of(year, 12, 31, 23, 59, 59);
+        List<Order> orders = orderRepository.findByCreatedAtBetween(startOfYear, endOfYear);
+
+        // Lấy danh sách cửa hàng
+        Set<Store> stores = orders.stream()
+                .map(Order::getStore)
+                .collect(Collectors.toSet());
+
+        // Nhóm đơn hàng theo tháng và cửa hàng
+        Map<Integer, Map<Store, BigDecimal>> revenueByMonthAndStore = orders.stream()
+                .collect(Collectors.groupingBy(
+                        order -> order.getCreatedAt().getMonthValue(),
+                        Collectors.groupingBy(
+                                Order::getStore,
+                                Collectors.reducing(
+                                        BigDecimal.ZERO,
+                                        Order::getTotalPrice,
+                                        BigDecimal::add
+                                )
+                        )
+                ));
+
+        // Tạo dữ liệu trả về
+        List<MonthlyRevenueDTO> data = new ArrayList<>();
+        for (int month = 1; month <= 12; month++) {
+            MonthlyRevenueDTO monthlyRevenue = new MonthlyRevenueDTO();
+            monthlyRevenue.setName("Tháng " + month);
+
+            Map<String, BigDecimal> storeRevenues = new HashMap<>();
+            for (Store store : stores) {
+                BigDecimal revenue = revenueByMonthAndStore
+                        .getOrDefault(month, Collections.emptyMap())
+                        .getOrDefault(store, BigDecimal.ZERO);
+                storeRevenues.put("store" + store.getId(), revenue);
+            }
+            monthlyRevenue.setStoreRevenues(storeRevenues);
+            data.add(monthlyRevenue);
+        }
+
+        return Collections.singletonMap("data", data);
+    }
+    public Map<String, List<Map<String, List<CategoryRevenueDTO>>>> getRevenueByCategory(int month, int year) {
+        // Validate month
+        if (month < 1 || month > 12) {
+            throw new IllegalArgumentException("Tháng phải từ 1 đến 12");
+        }
+
+        // Lấy danh sách đơn hàng trong tháng/năm
+        LocalDateTime startOfMonth = LocalDateTime.of(year, month, 1, 0, 0);
+        LocalDateTime endOfMonth = startOfMonth.plusMonths(1).minusSeconds(1);
+        List<Order> orders = orderRepository.findByCreatedAtBetween(startOfMonth, endOfMonth);
+
+        // Nhóm dữ liệu theo cửa hàng và danh mục
+        Map<Store, Map<String, BigDecimal>> revenueByStoreAndCategory = orders.stream()
+                .flatMap(order -> order.getOrderDetails().stream())
+                .collect(Collectors.groupingBy(
+                        orderDetail -> orderDetail.getOrder().getStore(),
+                        Collectors.groupingBy(
+                                orderDetail -> orderDetail.getProductVariant().getProduct().getCategory().getName(),
+                                Collectors.reducing(
+                                        BigDecimal.ZERO,
+                                        OrderDetail::getTotalPrice,
+                                        BigDecimal::add
+                                )
+                        )
+                ));
+
+        // Tạo dữ liệu trả về
+        List<Map<String, List<CategoryRevenueDTO>>> data = new ArrayList<>();
+        for (Store store : revenueByStoreAndCategory.keySet()) {
+            Map<String, List<CategoryRevenueDTO>> storeData = new HashMap<>();
+            List<CategoryRevenueDTO> categoryRevenues = revenueByStoreAndCategory.get(store)
+                    .entrySet().stream()
+                    .map(entry -> new CategoryRevenueDTO(entry.getKey(), entry.getValue()))
+                    .collect(Collectors.toList());
+            storeData.put("store" + store.getId(), categoryRevenues);
+            data.add(storeData);
+        }
+
+        return Collections.singletonMap("data", data);
+    }
+
+    // Báo cáo top 10 sản phẩm bán chạy (nhóm theo Product, cộng dồn các biến thể)
+    public Map<String, List<  TopProductDTO>> getTopProducts(int month, int year) {
+        if (month < 1 || month > 12) {
+            throw new IllegalArgumentException("Tháng phải từ 1 đến 12");
+        }
+
+        LocalDateTime startOfMonth = LocalDateTime.of(year, month, 1, 0, 0);
+        LocalDateTime endOfMonth = startOfMonth.plusMonths(1).minusSeconds(1);
+        List<Order> orders = orderRepository.findByCreatedAtBetween(startOfMonth, endOfMonth);
+
+        // Nhóm theo Product, tính tổng quantity và revenue từ tất cả các biến thể
+        Map<Product, ProductStats> productStatsMap = orders.stream()
+                .flatMap(order -> order.getOrderDetails().stream())
+                .collect(Collectors.groupingBy(
+                        orderDetail -> orderDetail.getProductVariant().getProduct(),
+                        Collectors.teeing(
+                                Collectors.summingInt(OrderDetail::getQuantity),
+                                Collectors.reducing(BigDecimal.ZERO, OrderDetail::getTotalPrice, BigDecimal::add),
+                                (quantity, revenue) -> new ProductStats(quantity, revenue)
+                        )
+                ));
+
+        // Chuyển thành danh sách DTO và sắp xếp giảm dần theo totalQuantitySold
+        List<  TopProductDTO> topProducts = productStatsMap.entrySet().stream()
+                .map(entry -> {
+                    Product product = entry.getKey();
+                    ProductStats stats = entry.getValue();
+                    return new   TopProductDTO(
+                            product.getId(),
+                            product.getName(),
+                            stats.quantity,
+                            stats.revenue
+                    );
+                })
+                .sorted(Comparator.comparingInt(  TopProductDTO::getTotalQuantitySold).reversed())
+                .limit(10)
+                .collect(Collectors.toList());
+
+        return Collections.singletonMap("data", topProducts);
+    }
+
+    // Lớp phụ để lưu trữ số liệu sản phẩm
+    private static class ProductStats {
+        int quantity;
+        BigDecimal revenue;
+
+        ProductStats(int quantity, BigDecimal revenue) {
+            this.quantity = quantity;
+            this.revenue = revenue;
+        }
+    }
+}

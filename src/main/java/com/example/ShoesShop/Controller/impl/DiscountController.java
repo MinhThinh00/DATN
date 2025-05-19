@@ -1,6 +1,5 @@
 package com.example.ShoesShop.Controller.impl;
 
-
 import com.example.ShoesShop.DTO.DiscountDTO;
 import com.example.ShoesShop.DTO.ProductDTO;
 import com.example.ShoesShop.DTO.response.ApiResponse;
@@ -11,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,8 +41,26 @@ public class DiscountController {
         }
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse> searchDiscounts(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") LocalDateTime endDate,
+            @RequestParam(required = false) Boolean isActive,
+            @PageableDefault(page = 0, size = 10, sort = {"id"}, direction = Sort.Direction.DESC) Pageable pageable)
+    {
+        Page<DiscountDTO> discounts = discountService.searchDiscounts(name, startDate, endDate, isActive, pageable);
+        List<DiscountDTO> discountList = discounts.getContent().stream().collect(Collectors.toList());
+        Map<String, Object> response = new HashMap<>();
+        response.put("discount", discountList);
+        response.put("currentPage", discounts.getNumber());
+        response.put("totalItems", discounts.getTotalElements());
+        response.put("totalPages", discounts.getTotalPages());
+        return ResponseEntity.ok(new ApiResponse(true, "Discounts retrieved successfully", response));
+    }
+
     @GetMapping("/{id}")
-    public ResponseEntity<DiscountDTO> getById( @PathVariable Long id) {
+    public ResponseEntity<DiscountDTO> getById(@PathVariable Long id) {
         try {
             DiscountDTO discount = discountService.getDiscountById(id);
             return ResponseEntity.ok(discount);
@@ -62,36 +80,17 @@ public class DiscountController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteDiscount(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse> deleteDiscount(@PathVariable Long id) {
         discountService.deleteDiscount(id);
-        return ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/search")
-    public ResponseEntity<ApiResponse> searchDiscounts(
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) LocalDateTime startDate,
-            @RequestParam(required = false) LocalDateTime endDate,
-            @RequestParam(required = false) Boolean isActive,
-            @PageableDefault(page = 0, size = 10, sort = {"id"}, direction = Sort.Direction.ASC) Pageable pageable)
-    {
-
-        Page<DiscountDTO> discounts = discountService.searchDiscounts(name,startDate, endDate,isActive, pageable);
-        List<DiscountDTO> discountList = discounts.getContent().stream().collect(Collectors.toList());
-        Map<String, Object> response = new HashMap<>();
-        response.put("discount", discountList);
-        response.put("currentPage", discounts.getNumber());
-        response.put("totalItems", discounts.getTotalElements());
-        response.put("totalPages", discounts.getTotalPages());
-        return ResponseEntity.ok(new ApiResponse(true, "Products retrieved successfully", response));
+        ApiResponse apiResponse = new ApiResponse(true,"xóa thanh công ", null);
+        return ResponseEntity.ok(apiResponse);
     }
 
     @GetMapping
     public ResponseEntity<ApiResponse> getAllDiscounts(
             @RequestParam(defaultValue = "0") int page,
-            @PageableDefault(page = 0, size = 10, sort = {"id"}, direction = Sort.Direction.ASC) Pageable pageable)
+            @PageableDefault(page = 0, size = 10, sort = {"id"}, direction = Sort.Direction.DESC) Pageable pageable)
     {
-
         Page<DiscountDTO> discounts = discountService.getDiscount(pageable);
         List<DiscountDTO> discountList = discounts.getContent().stream().collect(Collectors.toList());
         Map<String, Object> response = new HashMap<>();
@@ -99,6 +98,6 @@ public class DiscountController {
         response.put("currentPage", discounts.getNumber());
         response.put("totalItems", discounts.getTotalElements());
         response.put("totalPages", discounts.getTotalPages());
-        return ResponseEntity.ok(new ApiResponse(true, "Products retrieved successfully", response));
+        return ResponseEntity.ok(new ApiResponse(true, "Discounts retrieved successfully", response));
     }
 }

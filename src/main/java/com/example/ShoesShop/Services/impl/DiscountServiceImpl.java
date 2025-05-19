@@ -1,7 +1,14 @@
 package com.example.ShoesShop.Services.impl;
 
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -11,10 +18,17 @@ import com.example.ShoesShop.Repository.DiscountRepository;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class DiscountServiceImpl {
+
+
+    @Autowired
+    private EntityManager entityManager;
+
     private final DiscountRepository discountRepository;
 
     public DiscountServiceImpl(DiscountRepository discountRepository) {
@@ -124,16 +138,73 @@ public class DiscountServiceImpl {
         return discountDTO;
     }
 
-    /**
-     * Search for discounts based on start date, end date, and active status
-     * @param startDate Optional start date to search from
-     * @param endDate Optional end date to search to
-     * @param isActive Optional active status filter
-     * @return List of matching discount DTOs
-     */
     public Page<DiscountDTO> searchDiscounts(String name,LocalDateTime startDate, LocalDateTime endDate, Boolean isActive, Pageable pageable) {
-        Page<Discount> discountPage = discountRepository.findByFilter(name,startDate, endDate, isActive, pageable);
-        return discountPage.map(this::convertToDTO);
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Discount> query = cb.createQuery(Discount.class);
+        Root<Discount> root = query.from(Discount.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+
+        if (name != null && !name.trim().isEmpty()) {
+            String searchPattern = "%" + name.toLowerCase() + "%";
+            Predicate namePredicate = cb.like(cb.lower(root.get("name")), searchPattern);
+            Predicate codePredicate = cb.like(cb.lower(root.get("code")), searchPattern);
+            predicates.add(cb.or(namePredicate, codePredicate));
+        }
+
+
+        if (startDate != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("startDate"), startDate));
+        }
+
+        // Search by end date
+        if (endDate != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("endDate"), endDate));
+        }
+
+        if (isActive != null) {
+            predicates.add(cb.equal(root.get("isActive"), isActive));
+        }
+
+        query.where(predicates.toArray(new Predicate[0]));
+        query.orderBy(cb.asc(root.get("id")));
+
+        int pageNumber = pageable.getPageNumber();
+        int pageSize = pageable.getPageSize();
+
+        List<Discount> result = entityManager.createQuery(query)
+                .setFirstResult(pageNumber * pageSize)
+                .setMaxResults(pageSize)
+                .getResultList();
+
+
+        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+        Root<Discount> countRoot = countQuery.from(Discount.class);
+        countQuery.select(cb.count(countRoot));
+
+        List<Predicate> countPredicates = new ArrayList<>();
+        if (name != null && !name.trim().isEmpty()) {
+            String searchPattern = "%" + name.toLowerCase() + "%";
+            Predicate namePredicate = cb.like(cb.lower(countRoot.get("name")), searchPattern);
+            Predicate codePredicate = cb.like(cb.lower(countRoot.get("code")), searchPattern);
+            countPredicates.add(cb.or(namePredicate, codePredicate));
+        }
+        if (startDate != null) {
+            countPredicates.add(cb.greaterThanOrEqualTo(countRoot.get("startDate"), startDate));
+        }
+        if (endDate != null) {
+            countPredicates.add(cb.lessThanOrEqualTo(countRoot.get("endDate"), endDate));
+        }
+        if (isActive != null) {
+            countPredicates.add(cb.equal(countRoot.get("isActive"), isActive));
+        }
+
+        countQuery.where(countPredicates.toArray(new Predicate[0]));
+        Long totalElements = entityManager.createQuery(countQuery).getSingleResult();
+
+
+        Page<Discount> resultPage = new PageImpl<>(result, pageable, totalElements);
+        return resultPage.map(this::convertToDTO);
     }
 
     public Page<DiscountDTO> getDiscount(Pageable pageable) {
