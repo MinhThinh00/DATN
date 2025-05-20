@@ -122,7 +122,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payment/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/payment/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/store").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/store/**").permitAll()
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

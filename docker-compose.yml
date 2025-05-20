@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    restart: always
+    ports:
+      - "8169:8169"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://datn-postgres-1:5432/shoes_shop
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: minhthinh3110
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true
+    name: datn_app-network
