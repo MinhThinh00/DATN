@@ -6,8 +6,10 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 import com.example.ShoesShop.Entity.Payment;
+import com.example.ShoesShop.Enum.OrderStatus;
 import com.example.ShoesShop.Enum.PaymentStatus;
 import com.example.ShoesShop.Repository.PaymentRepository;
+import com.example.ShoesShop.Services.OrderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +25,7 @@ import com.example.ShoesShop.DTO.response.ApiResponse;
 import com.example.ShoesShop.Services.impl.VNPAYService;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.servlet.view.RedirectView;
 
 @RestController
 @RequestMapping("/api/payment")
@@ -33,6 +36,11 @@ public class PaymentController {
     private VNPAYService vnpayService;
     @Autowired
     private PaymentRepository paymentRepository;
+
+    @Autowired
+    private OrderService orderService;
+
+    private static final String FRONTEND_URL = "http://localhost:5173/profile";
 
     @PostMapping("/create-payment")
     public ResponseEntity<ApiResponse> createPayment(
@@ -74,12 +82,10 @@ public class PaymentController {
     }
 
     @GetMapping("/payment-callback")
-    public ResponseEntity<ApiResponse> paymentCallback(HttpServletRequest request) {
-//        logger.info("Received payment callback from VNPAY");
-//        request.getParameterMap().forEach((key, value) -> {
-//            logger.info("Parameter: {} = {}", key, String.join(", ", value));
-//        });
-        
+    public RedirectView paymentCallback(HttpServletRequest request) {
+
+        String redirectUrl = "";
+
         int paymentStatus = vnpayService.orderReturn(request);
         
         Map<String, Object> response = new HashMap<>();
@@ -108,27 +114,46 @@ public class PaymentController {
                         .orElseThrow(() -> new NoSuchElementException("Payment not found for transaction: " + vnp_TxnRef));
                 if (payment.getStatus() != PaymentStatus.PENDING) {
                     logger.info("Payment already processed for transaction: {}", vnp_TxnRef);
-                    return ResponseEntity.ok(new ApiResponse(true, "Payment already processed", response));
+                    redirectUrl = FRONTEND_URL;
                 }
                 payment.setStatus(PaymentStatus.COMPLETED);
                 payment.setUpdatedAt(LocalDateTime.now());
+                orderService.updateOrderStatus(payment.getOrder().getId(), OrderStatus.PROCESSING);
                 paymentRepository.save(payment);
                 response.put("paymentStatus", paymentStatusStr);
-                logger.info("Payment successful for transaction: {}. Payment status set to: {}", vnp_TxnRef, paymentStatusStr);
+                redirectUrl = FRONTEND_URL ;
             } catch (Exception e) {
                 logger.error("Failed to update payment status for transaction: {}", vnp_TxnRef, e);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(new ApiResponse(false, "Failed to update payment status: " + e.getMessage(), response));
+                redirectUrl = FRONTEND_URL + "&error=database_update_failed";
             }
             
             response.put("orderStatus", paymentStatusStr);
-           // logger.info("Payment successful for transaction: {}. Order status set to: {}", orderId, paymentStatusStr);
         } else if (paymentStatus == 0) {
-            message = "Payment failed";
-            success = false;
             paymentStatusStr = "FAILED";
-            response.put("orderStatus", paymentStatusStr);
-            logger.warn("Payment failed for request. Order status set to: {}", paymentStatusStr);
+
+            // Get transaction details để lấy vnp_TxnRef
+            Map<String, String> transactionDetails = vnpayService.getTransactionDetails(request);
+            String vnp_TxnRef = transactionDetails.get("vnp_TxnRef");
+
+            try {
+                Payment payment = paymentRepository.findByTransactionId(vnp_TxnRef)
+                        .orElseThrow(() -> new NoSuchElementException("Payment not found for transaction: " + vnp_TxnRef));
+
+                if (payment.getStatus() != PaymentStatus.PENDING) {
+                    logger.info("Payment already processed for transaction: {}", vnp_TxnRef);
+                } else {
+                    payment.setStatus(PaymentStatus.FAILED);
+                    payment.setUpdatedAt(LocalDateTime.now());
+                    paymentRepository.save(payment);
+
+                    orderService.updateOrderStatus(payment.getOrder().getId(), OrderStatus.CANCELLED);
+                    logger.info("Payment failed for transaction: {}. Payment status set to: {}", vnp_TxnRef, paymentStatusStr);
+                }
+                redirectUrl = FRONTEND_URL;
+            } catch (Exception e) {
+                logger.error("Failed to update payment status for transaction: {}", vnp_TxnRef, e);
+                redirectUrl = FRONTEND_URL;
+            }
         } else {
             message = "Invalid signature";
             success = false;
@@ -137,7 +162,8 @@ public class PaymentController {
             logger.error("Invalid signature in payment callback. Order status set to: {}", paymentStatusStr);
         }
         
-        return ResponseEntity.ok(new ApiResponse(success, message, response));
+        // return ResponseEntity.ok(new ApiResponse(success, message, response));
+        return new RedirectView(redirectUrl);
     }
     @GetMapping("/health")
     public ResponseEntity<String> healthCheck() {
