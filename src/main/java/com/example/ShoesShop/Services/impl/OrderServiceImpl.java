@@ -79,23 +79,41 @@ public class OrderServiceImpl implements OrderService {
             Store store = storeRepository.findById(orderRequest.getStoreId())
                     .orElseThrow(() -> new NoSuchElementException("Store not found with ID: " + orderRequest.getStoreId()));
 
-            Address address= addressRepository.findById(orderRequest.getAddressDTO().getId()).orElseGet(()->{
-                Address newAddress = new Address();
-                newAddress.setUser(user);
-                newAddress.setPhone(orderRequest.getAddressDTO().getPhone());
-                newAddress.setProvince(orderRequest.getAddressDTO().getProvince());
-                newAddress.setDistrict(orderRequest.getAddressDTO().getDistrict());
-                newAddress.setWard(orderRequest.getAddressDTO().getWard());
-                newAddress.setDefault(false);
-                newAddress.setAddress(orderRequest.getAddressDTO().getAddress());
-                return newAddress;
-            });
+//            Address address= addressRepository.findById(orderRequest.getAddressDTO().getId()).orElseGet(()->{
+//                Address newAddress = new Address();
+//                newAddress.setUser(user);
+//                newAddress.setPhone(orderRequest.getAddressDTO().getPhone());
+//                newAddress.setProvince(orderRequest.getAddressDTO().getProvince());
+//                newAddress.setDistrict(orderRequest.getAddressDTO().getDistrict());
+//                newAddress.setWard(orderRequest.getAddressDTO().getWard());
+//                newAddress.setDefault(false);
+//                newAddress.setAddress(orderRequest.getAddressDTO().getAddress());
+//                return newAddress;
+//            });
+            Address address;
+            AddressDTO addressDTO = orderRequest.getAddressDTO();
+            if (addressDTO.getId() != null) {
+                // Existing address: fetch from database
+                address = addressRepository.findById(addressDTO.getId())
+                        .orElseThrow(() -> new NoSuchElementException("Address not found with ID: " + addressDTO.getId()));
+            } else {
+                // New address: create and save
+                address = new Address();
+                address.setUser(user);
+                address.setPhone(addressDTO.getPhone());
+                address.setProvince(addressDTO.getProvince());
+                address.setDistrict(addressDTO.getDistrict());
+                address.setWard(addressDTO.getWard());
+                address.setAddress(addressDTO.getAddress());
+                address.setDefault(addressDTO.isDefault());
+                address = addressRepository.save(address); // Save to generate ID
+            }
 
             Discount discount = Optional.ofNullable(orderRequest.getDiscount_code())
                     .map(code -> discountRepository.findByCode(code)
                             .orElseThrow(() -> new RuntimeException("Discount code not found")))
                     .orElse(null);
-
+            if(discount!=null) discount.setQuantity(discount.getQuantity()-1);
             // Create order
             Order order = new Order();
             order.setUser(user);
@@ -372,9 +390,13 @@ public class OrderServiceImpl implements OrderService {
         dto.setCreatedAt(order.getCreatedAt());
         dto.setUpdatedAt(order.getUpdatedAt());
 
+
         if (order.getShippingAddress() != null) {
             AddressDTO addressDTO = new AddressDTO();
             addressDTO.setId(order.getShippingAddress().getId());
+            addressDTO.setProvince(order.getShippingAddress().getProvince());
+            addressDTO.setDistrict(order.getShippingAddress().getDistrict());
+            addressDTO.setWard(order.getShippingAddress().getWard());
             addressDTO.setAddress(order.getShippingAddress().getAddress());
             addressDTO.setPhone(order.getShippingAddress().getPhone());
             dto.setShippingAddress(addressDTO);

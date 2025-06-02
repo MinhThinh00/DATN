@@ -1,12 +1,13 @@
 package com.example.ShoesShop.Services.impl;
 
 
-import com.example.ShoesShop.DTO.Report.CategoryRevenueDTO;
-import com.example.ShoesShop.DTO.Report.TopProductDTO;
+import com.example.ShoesShop.DTO.Report.*;
 import com.example.ShoesShop.Entity.*;
+import com.example.ShoesShop.Enum.OrderStatus;
+import com.example.ShoesShop.Repository.OrderDetailRepository;
+import com.example.ShoesShop.Repository.ProductRepository;
 import org.springframework.stereotype.Service;
 
-import com.example.ShoesShop.DTO.Report.MonthlyRevenueDTO;
 import com.example.ShoesShop.Repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -21,6 +22,13 @@ public class ReportServiceImpl {
 
     @Autowired
     private OrderRepository orderRepository;
+
+    @Autowired
+    private OrderDetailRepository orderDetailRepository;
+
+    @Autowired
+    private ProductRepository productRepository;
+
 
     public Map<String, List<MonthlyRevenueDTO>> getRevenueByYear(int year) {
         // Lấy danh sách đơn hàng trong năm
@@ -214,5 +222,57 @@ public class ReportServiceImpl {
             this.quantity = quantity;
             this.revenue = revenue;
         }
+    }
+    public StoreSummaryDTO getStoreSummary() {
+        Integer year = 2025; // Hardcoded year
+        List<Long> storeIdList = Arrays.asList(1L, 2L); // Hardcoded store IDs
+
+        // Fetch orders
+        List<Order> orders = orderRepository.findByCreatedAtYearAndStoreIds(year, storeIdList);
+
+        // Calculate total orders
+        long totalOrders = orders.size();
+
+        // Calculate total revenue
+        BigDecimal totalRevenue = orders.stream()
+                .map(Order::getTotalPrice)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Fetch order details for total products sold
+        List<OrderDetail> orderDetails = orderDetailRepository.findByOrderCreatedAtYearAndStoreIds(year, storeIdList);
+        int totalProductsSold = orderDetails.stream()
+                .mapToInt(OrderDetail::getQuantity)
+                .sum();
+
+        // Calculate total unique customers
+        long totalCustomers = orders.stream()
+                .map(Order::getUser)
+                .map(User::getId)
+                .distinct()
+                .count();
+
+        return new StoreSummaryDTO(year, null, storeIdList, totalOrders, totalRevenue, totalProductsSold, totalCustomers);
+    }
+    public OrderStatusReportDTO getOrderStatusReport(String storeIds) {
+        List<Long> storeIdList = Arrays.stream(storeIds.split(","))
+                .map(Long::parseLong)
+                .collect(Collectors.toList());
+
+        // Fetch orders for specified stores
+        List<Order> orders = orderRepository.findByStoreIds(storeIdList);
+
+        // Calculate counts by status
+        long totalOrders = orders.size();
+        long pendingConfirmation = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.PENDING)
+                .count();
+        long handedOverToShipper = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.SHIPPED)
+                .count();
+        long completed = orders.stream()
+                .filter(order -> order.getStatus() == OrderStatus.COMPLETED)
+                .count();
+
+        return new OrderStatusReportDTO(storeIdList, totalOrders, pendingConfirmation, handedOverToShipper, completed);
     }
 }

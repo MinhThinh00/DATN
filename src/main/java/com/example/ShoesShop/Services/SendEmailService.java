@@ -14,6 +14,9 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.NumberFormat;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 @Service
@@ -58,12 +61,19 @@ public class SendEmailService {
         String totalAmount = currencyFormat.format(order.getTotalPrice()) + " VNĐ";
 
         // Format shipping address
-        String shippingAddress = order.getShippingAddress().getAddress();
+        String shippingAddress = Stream.of(
+                        order.getShippingAddress().getAddress(),
+                        order.getShippingAddress().getWard(),
+                        order.getShippingAddress().getDistrict(),
+                        order.getShippingAddress().getProvince()
+                ).filter(Objects::nonNull)
+                .collect(Collectors.joining(", "));
+
 
         // Replace placeholders in the template
         String emailContent = htmlTemplate
                 .replace("{{customerName}}", order.getUser().getFullName())
-                .replace("{{orderId}}", String.valueOf(order.getId()))
+                //.replace("{{orderId}}", String.valueOf(order.getId()))
                 .replace("{{orderDetails}}", orderDetails.toString())
                 .replace("{{totalAmount}}", totalAmount)
                 .replace("{{paymentMethod}}", order.getPayment().getPaymentMethod())

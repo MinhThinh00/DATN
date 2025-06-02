@@ -1,17 +1,15 @@
 package com.example.ShoesShop.Controller.impl;
 
 
-import com.example.ShoesShop.DTO.Report.CategoryRevenueDTO;
-import com.example.ShoesShop.DTO.Report.MonthlyRevenueDTO;
-import com.example.ShoesShop.DTO.Report.TopProductDTO;
+import com.example.ShoesShop.DTO.Report.*;
+import com.example.ShoesShop.Entity.Product;
 import com.example.ShoesShop.Services.impl.ReportServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 
 @RestController
@@ -36,4 +34,22 @@ public class ReportController {
             @PathVariable int month, @PathVariable int year) {
         return reportService.getTopProducts(month, year);
     }
+    @GetMapping("/stores/summary")
+    public ResponseEntity<StoreSummaryDTO> getStoreSummary(){
+        StoreSummaryDTO summary = reportService.getStoreSummary( );
+        return ResponseEntity.ok(summary);
+    }
+    @GetMapping("/orders/status")
+    public ResponseEntity<OrderStatusReportDTO> getOrderStatusReport(
+            @RequestParam("storeIds") String storeIds) {
+        OrderStatusReportDTO report = reportService.getOrderStatusReport(storeIds);
+        return ResponseEntity.ok(report);
+    }
+//    @GetMapping("/products/status")
+//    public ResponseEntity<ProductStatusReportDTO> getProductStatusReport(
+//            @RequestParam("storeIds") String storeIds) {
+//        ProductStatusReportDTO report = reportService.getProductStatusReport(storeIds);
+//        return ResponseEntity.ok(report);
+//    }
+
 }

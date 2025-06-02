@@ -217,6 +217,25 @@ public class DiscountServiceImpl {
         Optional<Discount> discountOptional = discountRepository.findByCode(code);
         Discount discount = discountOptional.orElseThrow(() ->
                 new IllegalArgumentException("Mã giảm giá không tồn tại: " + code));
+
+        if (!discount.getIsActive()) {
+            throw new IllegalArgumentException("Mã giảm giá đã bị vô hiệu hóa.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (discount.getStartDate() != null && now.isBefore(discount.getStartDate())) {
+            throw new IllegalArgumentException("Mã giảm giá chưa bắt đầu.");
+        }
+
+        if (discount.getEndDate() != null && now.isAfter(discount.getEndDate())) {
+            throw new IllegalArgumentException("Mã giảm giá đã hết hạn.");
+        }
+
+        if (discount.getQuantity() != null && discount.getQuantity() <= 0) {
+            throw new IllegalArgumentException("Mã giảm giá đã hết lượt sử dụng.");
+        }
+
         return convertToDTO(discount);
     }
+
 }

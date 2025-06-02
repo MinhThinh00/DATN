@@ -39,4 +39,23 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("endDate") LocalDateTime endDate,
             @Param("status") OrderStatus status,
             Pageable pageable);
+
+
+    @Query("SELECT o.user, COUNT(o) FROM Order o WHERE YEAR(o.createdAt) = :year AND MONTH(o.createdAt) = :month " +
+            "GROUP BY o.user ORDER BY COUNT(o) DESC")
+    List<Object[]> findTopCustomersByOrderCount(@Param("year") Integer year, @Param("month") Integer month, @Param("limit") int limit);
+
+    @Query("SELECT s.name FROM Store s WHERE s.id = :storeId")
+    String findStoreNameById(@Param("storeId") Long storeId);
+    @Query("SELECT o FROM Order o WHERE YEAR(o.createdAt) = :year AND MONTH(o.createdAt) = :month")
+    List<Order> findByCreatedAtYearAndMonth(@Param("year") Integer year, @Param("month") Integer month);
+
+    @Query("SELECT o FROM Order o WHERE YEAR(o.createdAt) = :year AND o.store.id IN :storeIds")
+    List<Order> findByCreatedAtYearAndStoreIds(@Param("year") Integer year, @Param("storeIds") List<Long> storeIds);
+    @Query("SELECT o FROM Order o WHERE YEAR(o.createdAt) = :year AND MONTH(o.createdAt) = :month AND o.store.id IN :storeIds")
+    List<Order> findByCreatedAtYearAndMonthAndStoreIds(@Param("year") Integer year, @Param("month") Integer month, @Param("storeIds") List<Long> storeIds);
+
+    // New query for orders by store IDs
+    @Query("SELECT o FROM Order o WHERE o.store.id IN :storeIds")
+    List<Order> findByStoreIds(@Param("storeIds") List<Long> storeIds);
 }
