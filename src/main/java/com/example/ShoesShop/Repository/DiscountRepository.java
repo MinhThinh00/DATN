@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 
 @Repository
@@ -38,4 +39,6 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
 
     Boolean existsByCode(String code);
     Page<Discount> findAll( Pageable pageable);
+
+    Optional<Discount> findByCode(String code);
 }

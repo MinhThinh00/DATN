@@ -149,28 +149,33 @@ public class AuthServiceImpl implements AuthService{
 
     @Override
     public LoginResponse loginWithGoogle(OAuth2AuthenticationToken token) {
-        // Lấy thông tin từ Google
-        String id = token.getPrincipal().getAttributes().get("sub").toString();
-        String email = token.getPrincipal().getAttributes().get("email").toString();
-        String name = token.getPrincipal().getAttributes().get("name").toString();
-        String picture = token.getPrincipal().getAttributes().get("picture").toString();
+        try {
+            // Lấy thông tin từ Google
+            String id = token.getPrincipal().getAttributes().get("sub").toString();
+            String email = token.getPrincipal().getAttributes().get("email").toString();
+            String name = token.getPrincipal().getAttributes().get("name").toString();
+            String picture = token.getPrincipal().getAttributes().get("picture").toString();
 
-        // Kiểm tra và lưu user
-        var user = userRepository.findByEmail(email).orElseGet(() -> {
-            User newUser = new User();
-            newUser.setEmail(email);
-            newUser.setUserName(name);
-            newUser.setIsActive(true);
-            newUser.setImg(picture);
-            return userRepository.save(newUser);
-        });
+            // Kiểm tra và lưu user
+            var user = userRepository.findByEmail(email).orElseGet(() -> {
+                User newUser = new User();
+                newUser.setEmail(email);
+                newUser.setUserName(name);
+                newUser.setIsActive(true);
+                newUser.setImg(picture);
+                return userRepository.save(newUser);
+            });
 
 
-        // Tạo JWT token
-        String jwtToken = jwtUtils.generateToken((UserDetails) user,user.getId());
-        long expiresIn = jwtUtils.getExpirationTime();
+            // Tạo JWT token
+            String jwtToken = jwtUtils.generateToken((UserDetails) user,user.getId());
+            long expiresIn = jwtUtils.getExpirationTime();
 
-        return new LoginResponse(jwtToken, expiresIn);
+            return new LoginResponse(jwtToken, expiresIn);
+        } catch (Exception e) {
+            throw new OurException("Không thể đăng nhập ằng google  " + e.getMessage());
+        }
+
     }
     private void sendOtpEmail(String email, int otp) {
         SimpleMailMessage message = new SimpleMailMessage();

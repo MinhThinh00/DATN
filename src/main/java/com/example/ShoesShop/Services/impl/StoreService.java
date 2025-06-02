@@ -20,8 +20,8 @@ public class StoreService {
         return storeRepository.findAll().stream().map(this::convertToDTO).toList();
     }
 
-    public Store getStoreById(Long id) {
-        return storeRepository.findById(id).orElse(null);
+    public StoreDTO getStoreById(Long id) {
+        return storeRepository.findById(id).map(this::convertToDTO).orElse(null);
     }
 
     @Transactional

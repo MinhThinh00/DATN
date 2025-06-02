@@ -18,7 +18,7 @@ public class StoreController {
     private StoreService storeService;
     
     @GetMapping
-    public ResponseEntity<List<StoreDTOgỉ>> getAllStores() {
+    public ResponseEntity<List<StoreDTO>> getAllStores() {
         List<StoreDTO> stores = storeService.getAllStores();
         return new ResponseEntity<>(stores, HttpStatus.OK);
     }

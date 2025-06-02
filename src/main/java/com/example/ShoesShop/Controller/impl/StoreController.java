@@ -24,8 +24,8 @@ public class StoreController {
     }
     
     @GetMapping("/{id}")
-    public ResponseEntity<Store> getStoreById(@PathVariable Long id) {
-        Store store = storeService.getStoreById(id);
+    public ResponseEntity<StoreDTO> getStoreById(@PathVariable Long id) {
+        StoreDTO store = storeService.getStoreById(id);
         if (store != null) {
             return new ResponseEntity<>(store, HttpStatus.OK);
         }

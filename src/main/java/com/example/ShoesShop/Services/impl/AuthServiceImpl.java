@@ -173,7 +173,7 @@ public class AuthServiceImpl implements AuthService{
 
             return new LoginResponse(jwtToken, expiresIn);
         } catch (Exception e) {
-            throw new OurException("Không thể đăng nhập ằng google  " + e.getMessage());
+            throw new OurException("Không thể đăng nhập bằng google  " + e.getMessage());
         }
 
     }

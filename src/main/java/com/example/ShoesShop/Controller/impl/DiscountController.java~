@@ -105,11 +105,9 @@ public class DiscountController {
     public ResponseEntity<ApiResponse> checkDiscount(@RequestParam String code) {
         try {
             DiscountDTO discount = discountService.checkDiscount(code);
-            ApiResponse response = new ApiResponse(true, "Mã giảm giá hợp lệ", discount);
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(discount);
         } catch (IllegalArgumentException e) {
-            ApiResponse response = new ApiResponse(false, e.getMessage(), null);
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(null);
         }
     }
 }

@@ -90,7 +90,7 @@ public class UserServiceImpl {
         // Option 2: Soft delete (if you prefer)
         // user.setIsActive(false);
         // userRepository.save(user);
-            user.setUserName(userDto.getUserName());
+
             if (userDto.getEmail() != null) {
                 user.setEmail(userDto.getEmail());
             }

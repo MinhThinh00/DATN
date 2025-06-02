@@ -215,8 +215,9 @@ public class DiscountServiceImpl {
 
     public DiscountDTO checkDiscount(String code) {
         Optional<Discount> discountOptional = discountRepository.findByCode(code);
-        Discount discount = discountOptional.orElseThrow(() ->
-                new IllegalArgumentException("Mã giảm giá không tồn tại: " + code));
+        if (discount == null) {
+            throw new IllegalArgumentException("Discount not found with code: " + code);
+        }
         return convertToDTO(discount);
     }
 }

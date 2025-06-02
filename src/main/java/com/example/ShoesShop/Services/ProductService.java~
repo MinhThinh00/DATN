@@ -12,29 +12,59 @@ import java.util.List;
 
 public interface ProductService {
 
+    /**
+     * Tạo sản phẩm mới với đầy đủ thông tin
+     */
     Product createFullProduct(ProductInputDTO productDTO);
 
+    /**
+     * Cập nhật thông tin sản phẩm
+     */
     Product updateProduct(Long productId, ProductInputDTO productDTO);
 
+    /**
+     * Xóa sản phẩm
+     */
     void deleteProduct(Long productId);
 
+    /**
+     * Lấy danh sách tất cả sản phẩm
+     */
     List<Product> getAllProducts();
 
-
+    /**
+     * Lấy sản phẩm theo danh mục
+     */
     List<Product> getProductsByCategory(Long categoryId);
 
+    /**
+     * Lấy sản phẩm theo cửa hàng
+     */
     Page<Product> getProductsByStore(Long storeId, Pageable pageable);
 
-
+    /**
+     * Tìm kiếm sản phẩm theo tên
+     */
     List<Product> searchProductsByName(String name);
 
-
+    /**
+     * Lấy chi tiết sản phẩm
+     */
     ProductDTO getProductDetails(Long productId);
 
+    /**
+     * Lấy sản phẩm theo loại nhóm
+     */
     List<Product> getProductsByGroupType(GroupType groupType);
 
+    /**
+     * Thêm sản phẩm vào nhóm
+     */
     void addProductToGroup(Long productId, GroupType groupType);
 
+    /**
+     * Xóa sản phẩm khỏi nhóm
+     */
     void removeProductFromGroup(Long productId, GroupType groupType);
 
     /**

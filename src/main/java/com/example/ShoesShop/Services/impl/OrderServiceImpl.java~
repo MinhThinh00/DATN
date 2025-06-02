@@ -60,9 +60,6 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private CartService cartService;
 
-    @Autowired
-    private AddressServiceImpl addressService;
-
     @Override
     @Transactional
     public Order createOrder(OrderRequestDTO orderRequest, Long userId)  {
