@@ -7,7 +7,7 @@ services:
     ports:
       - "8169:8169"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://datn-postgres-1:5432/shoes_shop
+      SPRING_DATASOURCE_URL: jdbc:postgresql://192.168.1.17:5432/shoes_shop
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: minhthinh3110
     networks:

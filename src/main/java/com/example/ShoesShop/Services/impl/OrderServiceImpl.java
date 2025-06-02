@@ -62,6 +62,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Autowired
     private AddressServiceImpl addressService;
+    @Autowired
+    private DiscountRepository discountRepository;
 
     @Override
     @Transactional
@@ -77,18 +79,28 @@ public class OrderServiceImpl implements OrderService {
             Store store = storeRepository.findById(orderRequest.getStoreId())
                     .orElseThrow(() -> new NoSuchElementException("Store not found with ID: " + orderRequest.getStoreId()));
 
-            // Create or update address
-            Address address = new Address();
-            address.setUser(user);
-            address.setPhone(orderRequest.getPhone());
-            address.setDefault(false);
-            address.setAddress(orderRequest.getAddress());
-            address = addressRepository.save(address);
+            Address address= addressRepository.findById(orderRequest.getAddressDTO().getId()).orElseGet(()->{
+                Address newAddress = new Address();
+                newAddress.setUser(user);
+                newAddress.setPhone(orderRequest.getAddressDTO().getPhone());
+                newAddress.setProvince(orderRequest.getAddressDTO().getProvince());
+                newAddress.setDistrict(orderRequest.getAddressDTO().getDistrict());
+                newAddress.setWard(orderRequest.getAddressDTO().getWard());
+                newAddress.setDefault(false);
+                newAddress.setAddress(orderRequest.getAddressDTO().getAddress());
+                return newAddress;
+            });
+
+            Discount discount = Optional.ofNullable(orderRequest.getDiscount_code())
+                    .map(code -> discountRepository.findByCode(code)
+                            .orElseThrow(() -> new RuntimeException("Discount code not found")))
+                    .orElse(null);
 
             // Create order
             Order order = new Order();
             order.setUser(user);
             order.setStore(store); // Set the store directly from the request
+            order.setDiscount(discount);
 
             order.setTotalPrice(orderRequest.getTotalAmount());
             order.setTotalQuantity(orderRequest.getItems().stream()

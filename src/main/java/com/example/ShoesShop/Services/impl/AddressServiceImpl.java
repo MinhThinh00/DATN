@@ -7,6 +7,7 @@ import com.example.ShoesShop.Entity.User;
 import com.example.ShoesShop.Repository.AddressRepository;
 import com.example.ShoesShop.Repository.UserRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
@@ -37,6 +38,9 @@ public class AddressServiceImpl {
         Address address = new Address();
         User user = userRepository.findById(addressDTO.getUserId())
                 .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + addressDTO.getUserId()));
+        if (addressDTO.isDefault()) {
+            addressRepository.clearDefaultAddressForUser(address.getUser().getId());
+        }
         address.setUser(user);
         address.setPhone(addressDTO.getPhone());
         address.setProvince(addressDTO.getProvince());
@@ -48,9 +52,15 @@ public class AddressServiceImpl {
         Address savedAddress = addressRepository.save(address);
         return convertToDto(savedAddress);
     }
+
+    @Transactional
     public AddressDTO updateAddress(Long id,AddressDTO addressDTO) {
         Address address = addressRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Address not found with id: " + id));
+
+        if (addressDTO.isDefault()) {
+            addressRepository.clearDefaultAddressForUser(address.getUser().getId());
+        }
         address.setPhone(addressDTO.getPhone());
         address.setProvince(addressDTO.getProvince());
         address.setDistrict(addressDTO.getDistrict());

@@ -21,10 +21,8 @@ public class Discount {
     private LocalDateTime endDate;
     private boolean isActive;
 
-//    @OneToMany(mappedBy = "discount")
-//    private List<ProductDiscount> productDiscounts;
-
-
+    @OneToMany(mappedBy = "discount")
+    private List<ProductDiscount> productDiscounts;
 
     public void setIsActive(boolean isActive) {
         this.isActive = isActive;

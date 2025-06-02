@@ -8,13 +8,15 @@ import java.util.List;
 @Data
 public class OrderRequestDTO {
     private boolean isFromCart;
-    private String fullName;
-    private String email;
-    private String phone;
-    private String province;
-    private String district;
-    private String ward;
-    private String address;
+//    private String fullName;
+//    private String email;
+//    private String phone;
+//    private String province;
+//    private String district;
+//    private String ward;
+//    private String address;
+    private AddressDTO addressDTO;
+    private String discount_code;
     private String note;
     private String paymentMethod;
     private BigDecimal totalAmount;

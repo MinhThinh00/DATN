@@ -50,8 +50,7 @@ public class Order {
     private Address shippingAddress;
 
     @ManyToOne
-    @JoinColumn(name = "discount_id")
+    @JoinColumn(name="discount_id")
     private Discount discount;
-
 
 }
