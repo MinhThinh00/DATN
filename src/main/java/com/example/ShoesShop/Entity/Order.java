@@ -49,4 +49,8 @@ public class Order {
     @JoinColumn(name = "address_id")
     private Address shippingAddress;
 
+    @ManyToOne
+    @JoinColumn(name="discount_id")
+    private Discount discount;
+
 }

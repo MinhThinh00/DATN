@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +27,46 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     List<Product> findByNameContainingIgnoreCase(String name);
 
-    @Query("SELECT p FROM Product p JOIN p.groupMappings gm JOIN gm.productGroup pg WHERE pg.type = :groupType")
+    @Query("SELECT DISTINCT  p FROM Product p JOIN p.groupMappings gm JOIN gm.productGroup pg WHERE pg.type = :groupType")
     Page<Product> findByGroupType(@Param("groupType") GroupType groupType, Pageable pageable);
+
+
+
+    @Query("SELECT p FROM Product p WHERE p.store.id = :storeId " +
+            "AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+            "    OR LOWER(p.description) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           // "AND (:Group IS NULL OR p.grouptype)"+
+            "AND (:type IS NULL OR :type = '' OR LOWER(p.category.name) = LOWER(:type)) " +
+            "AND (:minPrice IS NULL OR p.basePrice >= :minPrice) " +
+            "AND (:maxPrice IS NULL OR p.basePrice <= :maxPrice)")
+    Page<Product> findProductsWithFilters(
+            @Param("storeId") Long storeId,
+            @Param("search") String search,
+            @Param("type") String type,
+            @Param("minPrice") BigDecimal minPrice,
+            @Param("maxPrice") BigDecimal maxPrice,
+            Pageable pageable);
+
+    @Query("SELECT DISTINCT p FROM Product p " +
+            "JOIN p.groupMappings gm JOIN gm.productGroup pg " +
+            "WHERE p.store.id = :storeId " +
+            "AND (:groupType IS NULL OR pg.type = :groupType) " +
+            "AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+            "    OR LOWER(p.description) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+            "AND (:type IS NULL OR :type = '' OR LOWER(p.category.name) = LOWER(:type)) " +
+            "AND (:minPrice IS NULL OR p.basePrice >= :minPrice) " +
+            "AND (:maxPrice IS NULL OR p.basePrice <= :maxPrice)")
+    Page<Product> searchProductsFilte(
+            @Param("storeId") Long storeId,
+            @Param("groupType") GroupType groupType,
+            @Param("search") String search,
+            @Param("type") String type,
+            @Param("minPrice") BigDecimal minPrice,
+            @Param("maxPrice") BigDecimal maxPrice,
+            Pageable pageable);
+
+    // Query to find products by store IDs
+    @Query("SELECT p FROM Product p JOIN p.variants pv WHERE p.store.id IN :storeIds")
+    List<Product> findByStoreIds(@Param("storeIds") List<Long> storeIds);
+
 }

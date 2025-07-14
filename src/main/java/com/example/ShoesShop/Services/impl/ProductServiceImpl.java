@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -78,7 +79,7 @@ public class ProductServiceImpl implements ProductService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
 
-        clearExistingData(product);
+        //clearExistingData(product);
         updateProductDetails(product, productDTO);
 
         saveProductImages(product, productDTO.getImages());
@@ -362,50 +363,72 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void clearExistingData(Product product) {
-//        // Xóa tất cả liên kết nhóm sản phẩm
-//        productGroupMappingRepository.deleteByProductId(product.getId());
-//
-//        // Xóa tất cả tùy chọn sản phẩm
-//        productOptionRepository.deleteByProductId(product.getId());
-//
-//        // Xóa tất cả biến thể sản phẩm và dữ liệu liên quan
+        // 1. Xóa ánh xạ tùy chọn biến thể TRƯỚC
 //        for (ProductVariant variant : product.getVariants()) {
-//            // Xóa thông tin tồn kho
+//            variantOptionMappingRepository.deleteByVariantId(variant.getId());
+//        }
+//
+//        // 2. Xóa tất cả biến thể và tồn kho
+//        for (ProductVariant variant : product.getVariants()) {
 //            if (variant.getInventory() != null) {
 //                inventoryRepository.delete(variant.getInventory());
 //            }
-//
-//            // Xóa ánh xạ tùy chọn biến thể
-//            variantOptionMappingRepository.deleteByVariantId(variant.getId());
-//
-//            // Xóa biến thể
 //            productVariantRepository.delete(variant);
 //        }
-        //--------------------------//
-        // 1. Xóa ánh xạ tùy chọn biến thể TRƯỚC
-        for (ProductVariant variant : product.getVariants()) {
-            variantOptionMappingRepository.deleteByVariantId(variant.getId());
-        }
-
-        // 2. Xóa tất cả biến thể và tồn kho
-        for (ProductVariant variant : product.getVariants()) {
-            if (variant.getInventory() != null) {
-                inventoryRepository.delete(variant.getInventory());
-            }
-            productVariantRepository.delete(variant);
-        }
-
-        // 3. Xóa tất cả tùy chọn sản phẩm (sau khi không còn bị ràng buộc bởi variant_option_mapping)
-        productOptionRepository.deleteByProductId(product.getId());
-
-        // 4. Xóa liên kết nhóm sản phẩm
-        productGroupMappingRepository.deleteByProductId(product.getId());
 //
-        // Xóa các danh sách tham chiếu
+//        // 3. Xóa tất cả tùy chọn sản phẩm (sau khi không còn bị ràng buộc bởi variant_option_mapping)
+//        productOptionRepository.deleteByProductId(product.getId());
+//
+//        // 4. Xóa liên kết nhóm sản phẩm
+//        productGroupMappingRepository.deleteByProductId(product.getId());
+////
+//        // Xóa các danh sách tham chiếu
 //        product.getImages().clear();
 //        product.getProductOptions().clear();
 //        product.getVariants().clear();
 //        product.getGroupMappings().clear();
+        //---------------------------------------------------//
+        for (ProductVariant variant : new ArrayList<>(product.getVariants())) {
+            variantOptionMappingRepository.deleteByVariantId(variant.getId());
+        }
+
+        // Xóa Inventory và ProductVariant
+        for (ProductVariant variant : new ArrayList<>(product.getVariants())) {
+            if (variant.getInventory() != null) {
+                variant.getInventory().setVariant(null); // Bỏ tham chiếu
+                inventoryRepository.deleteById(variant.getInventory().getId());
+                inventoryRepository.flush(); // Đảm bảo xóa ngay
+            }
+            variant.setProduct(null); // Bỏ tham chiếu
+            productVariantRepository.deleteById(variant.getId());
+            productVariantRepository.flush(); // Đảm bảo xóa ngay
+        }
+        product.getVariants().clear();
+
+        // Xóa ProductOption và VariantOptionMapping liên quan
+        for (ProductOption option : new ArrayList<>(product.getProductOptions())) {
+            variantOptionMappingRepository.deleteByProductOptionId(option.getId());
+            option.setProduct(null); // Bỏ tham chiếu
+            productOptionRepository.deleteById(option.getId());
+            productOptionRepository.flush(); // Đảm bảo xóa ngay
+        }
+        product.getProductOptions().clear();
+
+        // Xóa ProductImage
+        for (ProductImage image : new ArrayList<>(product.getImages())) {
+            image.setProduct(null); // Bỏ tham chiếu
+            productImageRepository.deleteById(image.getId());
+            productImageRepository.flush(); // Đảm bảo xóa ngay
+        }
+        product.getImages().clear();
+
+        // Xóa ProductGroupMapping
+        productGroupMappingRepository.deleteByProductId(product.getId());
+        productGroupMappingRepository.flush(); // Đảm bảo xóa ngay
+        product.getGroupMappings().clear();
+
+        // Lưu trạng thái để đảm bảo xóa hoàn toàn
+        productRepository.saveAndFlush(product);
     }
 
     private void saveProductImages(Product product, List<String> imageUrls) {
@@ -545,33 +568,75 @@ public class ProductServiceImpl implements ProductService {
                 String variantSku = variantInput.getSku() + "-" + size;
 
                 // Kiểm tra SKU trùng lặp
-                if (productVariantRepository.findBySku(variantSku).isPresent()) {
-                    throw new IllegalArgumentException("SKU already exists: " + variantSku);
+//                if (productVariantRepository.findBySku(variantSku).isPresent()) {
+//                    throw new IllegalArgumentException("SKU already exists: " + variantSku);
+//                }
+//
+//                // Tạo và lưu biến thể mới
+//                ProductVariant variant = new ProductVariant();
+//                variant.setName(variantName);
+//                variant.setSku(variantSku);
+//                variant.setPrice(variantInput.getPrice());
+//                variant.setImg(variantInput.getVariantImage());
+//                variant.setProduct(product);
+//                variant.setOptionMappings(new ArrayList<>());
+//                variant.setCartDetails(new ArrayList<>());
+//                variant.setOrderDetails(new ArrayList<>());
+//                variant = productVariantRepository.save(variant);
+//                product.getVariants().add(variant);
+//
+//                // Tạo và lưu thông tin tồn kho
+//                Inventory inventory = new Inventory();
+//                inventory.setQuantity(quantity);
+//                inventory.setStore(product.getStore());
+//                inventory.setVariant(variant);
+//                inventory = inventoryRepository.save(inventory);
+//                variant.setInventory(inventory);
+//
+//                // Liên kết biến thể với các option
+//                mapVariantToOptions(variant, List.of(productColorOption, productSizeOption));
+                //---------------------------------------//
+                ProductVariant variant;
+                Optional<ProductVariant> existingVariant = productVariantRepository.findBySku(variantSku);
+                if (existingVariant.isPresent()) {
+                    // Cập nhật biến thể hiện có
+                    System.out.println("Updating existing variant with SKU: " + variantSku);
+                    variant = existingVariant.get();
+                    variant.setName(variantName);
+                    variant.setPrice(variantInput.getPrice());
+                    variant.setImg(variantInput.getVariantImage());
+                    variant.setProduct(product);
+                    variant.getOptionMappings().clear(); // Xóa ánh xạ cũ
+                } else {
+                    // Tạo biến thể mới
+                    System.out.println("Creating new variant with SKU: " + variantSku);
+                    variant = new ProductVariant();
+                    variant.setName(variantName);
+                    variant.setSku(variantSku);
+                    variant.setPrice(variantInput.getPrice());
+                    variant.setImg(variantInput.getVariantImage());
+                    variant.setProduct(product);
+                    variant.setOptionMappings(new ArrayList<>());
+                    variant.setCartDetails(new ArrayList<>());
+                    variant.setOrderDetails(new ArrayList<>());
                 }
-
-                // Tạo và lưu biến thể mới
-                ProductVariant variant = new ProductVariant();
-                variant.setName(variantName);
-                variant.setSku(variantSku);
-                variant.setPrice(variantInput.getPrice());
-                variant.setImg(variantInput.getVariantImage());
-                variant.setProduct(product);
-                variant.setOptionMappings(new ArrayList<>());
-                variant.setCartDetails(new ArrayList<>());
-                variant.setOrderDetails(new ArrayList<>());
                 variant = productVariantRepository.save(variant);
                 product.getVariants().add(variant);
 
-                // Tạo và lưu thông tin tồn kho
-                Inventory inventory = new Inventory();
+                // Cập nhật hoặc tạo Inventory
+                Inventory inventory = variant.getInventory();
+                if (inventory == null) {
+                    inventory = new Inventory();
+                    inventory.setStore(product.getStore());
+                    inventory.setVariant(variant);
+                }
                 inventory.setQuantity(quantity);
-                inventory.setStore(product.getStore());
-                inventory.setVariant(variant);
                 inventory = inventoryRepository.save(inventory);
                 variant.setInventory(inventory);
 
                 // Liên kết biến thể với các option
                 mapVariantToOptions(variant, List.of(productColorOption, productSizeOption));
+                System.out.println("Saved variant with SKU: " + variantSku);
             }
         }
     }
@@ -585,5 +650,10 @@ public class ProductServiceImpl implements ProductService {
             variant.getOptionMappings().add(mapping);
             productOption.getVariantMappings().add(mapping);
         }
+    }
+
+    @Override
+    public Page<Product> getProductSearch(Long storeId,GroupType groupType, String search, String type, BigDecimal minPrice, BigDecimal maxPrice, Pageable pageable) {
+        return productRepository.searchProductsFilte(storeId,groupType, search, type, minPrice, maxPrice,pageable);
     }
 }

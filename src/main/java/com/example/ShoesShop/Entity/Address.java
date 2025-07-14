@@ -15,9 +15,13 @@ public class Address {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
-
     private String phone;
+
+    private String province;
+    private String district;
+    private String ward;
     private String address;
+
     private boolean isDefault;
 
 }

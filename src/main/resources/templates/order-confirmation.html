@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Order Confirmation</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+    <tr>
+        <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <tr>
+                    <td style="padding: 20px;">
+                        <h2 style="color: #333333; margin-bottom: 10px;">Xin chào {{customerName}},</h2>
+                        <p style="color: #555555; font-size: 16px; margin-bottom: 20px;">
+                            Cảm ơn quý khách đã đặt hàng tại MonkeyShoes! Dưới đây là chi tiết đơn hàng:
+                        </p>
+                        <table width="100%" cellpadding="10" cellspacing="0" style="border-collapse: collapse; margin-bottom: 20px;">
+                            <thead>
+                            <tr style="background-color: #f8f8f8;">
+                                <th style="text-align: left; color: #333333; font-size: 14px; border-bottom: 1px solid #dddddd;">Sản phẩm</th>
+                                <th style="text-align: right; color: #333333; font-size: 14px; border-bottom: 1px solid #dddddd;">Số lượng</th>
+                                <th style="text-align: right; color: #333333; font-size: 14px; border-bottom: 1px solid #dddddd;">Giá</th>
+                                <th style="text-align: right; color: #333333; font-size: 14px; border-bottom: 1px solid #dddddd;">Tổng</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {{orderDetails}}
+                            </tbody>
+                            <tfoot>
+                            <tr>
+                                <td colspan="3" style="text-align: right; color: #333333; font-size: 16px; font-weight: bold; padding-top: 10px;">Tổng cộng:</td>
+                                <td style="text-align: right; color: #333333; font-size: 16px; font-weight: bold; padding-top: 10px;">{{totalAmount}}</td>
+                            </tr>
+                            </tfoot>
+                        </table>
+                        <h3 style="color: #333333; font-size: 16px; margin-bottom: 10px;">Thông tin thanh toán</h3>
+                        <p style="color: #555555; font-size: 14px; margin-bottom: 5px;">Phương thức: {{paymentMethod}}</p>
+                        <p style="color: #555555; font-size: 14px; margin-bottom: 20px;">Số tiền: {{totalAmount}}</p>
+                        <h3 style="color: #333333; font-size: 16px; margin-bottom: 10px;">Địa chỉ giao hàng</h3>
+                        <p style="color: #555555; font-size: 14px; margin-bottom: 5px;">{{shippingAddress}}</p>
+                        <p style="color: #555555; font-size: 14px; margin-bottom: 5px;">Số điện thoại: {{phone}}</p>
+                        <p style="color: #555555; font-size: 14px; margin-bottom: 20px;">
+                            Nếu có bất kỳ thắc mắc nào, xin vui lòng liên hệ với chúng tôi qua email trangnguyenn020403@gmail.com.
+                        </p>
+                        <p style="color: #555555; font-size: 14px;">
+                            Trân trọng,<br>
+                            <strong>Đội ngũ MonkeyShoes</strong>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="background-color: #f8f8f8; text-align: center; padding: 10px; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
+                        <p style="color: #777777; font-size: 12px; margin: 0;">
+                            © 2025 MonkeyShoes. All rights reserved.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>
