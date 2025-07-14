@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,19 +38,23 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<ApiResponse> createOrder(@RequestBody OrderRequestDTO orderRequest, @RequestParam Long userId) {
         try {
-            Order order = orderService.createOrder(orderRequest, userId);
-            
-            Map<String, Object> responseData = new HashMap<>();
-            responseData.put("orderId", order.getId());
-            responseData.put("status", order.getStatus());
-            responseData.put("totalAmount", order.getTotalPrice());
-            if ("VNPAY".equalsIgnoreCase(order.getPayment().getPaymentMethod())) {
-                responseData.put("vnpTxnRef", order.getPayment().getTransactionId());
+            List<Order> orders = orderService.createOrder(orderRequest, userId);
+
+            List<Map<String, Object>> responseDataList = new ArrayList<>();
+            for (Order order : orders) {
+                Map<String, Object> responseData = new HashMap<>();
+                responseData.put("orderId", order.getId());
+                responseData.put("status", order.getStatus());
+                responseData.put("totalAmount", order.getTotalPrice());
+                responseData.put("storeId", order.getStore().getId());
+                if ("VNPAY".equalsIgnoreCase(order.getPayment().getPaymentMethod())) {
+                    responseData.put("vnpTxnRef", order.getPayment().getTransactionId());
+                }
+                responseDataList.add(responseData);
             }
-            
+
             return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(new ApiResponse(true, "Order created successfully", responseData));
-            
+                    .body(new ApiResponse(true, "Orders created successfully", responseDataList));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse(false, "Failed to create order: " + e.getMessage(), null));
@@ -82,6 +87,20 @@ public class OrderController {
             response.put("totalItems", orders.getTotalElements());
             response.put("totalPages", orders.getTotalPages());
             
+            return ResponseEntity.ok(new ApiResponse(true, "Orders retrieved successfully", response));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse(false, e.getMessage(), null));
+        }
+    }
+    @GetMapping("/user/getall/{userId}")
+    public ResponseEntity<ApiResponse> getAllByUserId(
+            @PathVariable Long userId
+    ){
+        try {
+            List<OrderDTO> orders = orderService.getOrdersByUserId(userId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("orders", orders);
             return ResponseEntity.ok(new ApiResponse(true, "Orders retrieved successfully", response));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

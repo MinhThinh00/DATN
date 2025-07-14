@@ -2,6 +2,7 @@ package com.example.ShoesShop.Controller.impl;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
@@ -53,8 +54,8 @@ public class PaymentController {
 
         try {
             logger.info("Creating payment for amount: {}, orderInfo: {}", amount, orderInfo);
-
-            if (!paymentRepository.findByTransactionId(vnpTxnRef).isPresent()) {
+            List<Payment> payments = paymentRepository.findByTransactionId(vnpTxnRef);
+            if (payments.isEmpty()) {
                 logger.error("Invalid vnp_TxnRef: {} does not exist in database", vnpTxnRef);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ApiResponse(false, "Invalid vnp_TxnRef: Transaction ID does not exist", null));
@@ -110,17 +111,29 @@ public class PaymentController {
             //orderService.updateOrderStatus(orderId, orderStatus);
 
             try {
-                Payment payment = paymentRepository.findByTransactionId(vnp_TxnRef)
-                        .orElseThrow(() -> new NoSuchElementException("Payment not found for transaction: " + vnp_TxnRef));
-                if (payment.getStatus() != PaymentStatus.PENDING) {
-                    logger.info("Payment already processed for transaction: {}", vnp_TxnRef);
-                    redirectUrl = FRONTEND_URL;
+                List<Payment> payments = paymentRepository.findByTransactionId(vnp_TxnRef);
+//                Payment payment = paymentRepository.findByTransactionId(vnp_TxnRef)
+//                        .orElseThrow(() -> new NoSuchElementException("Payment not found for transaction: " + vnp_TxnRef));
+//                if (payment.getStatus() != PaymentStatus.PENDING) {
+//                    logger.info("Payment already processed for transaction: {}", vnp_TxnRef);
+//                    redirectUrl = FRONTEND_URL;
+//                }
+//                payment.setStatus(PaymentStatus.COMPLETED);
+//                payment.setUpdatedAt(LocalDateTime.now());
+//                orderService.updateOrderStatus(payment.getOrder().getId(), OrderStatus.PROCESSING);
+//                paymentRepository.save(payment);
+//                response.put("paymentStatus", paymentStatusStr);
+                for (Payment payment : payments) {
+                    if (payment.getStatus() != PaymentStatus.PENDING) {
+                        logger.info("Payment already processed for transaction: {}", vnp_TxnRef);
+                        continue;
+                    }
+                    payment.setStatus(PaymentStatus.COMPLETED);
+                    payment.setUpdatedAt(LocalDateTime.now());
+                    orderService.updateOrderStatus(payment.getOrder().getId(), OrderStatus.PROCESSING);
+                    paymentRepository.save(payment);
+                    response.put("paymentStatus", paymentStatusStr);
                 }
-                payment.setStatus(PaymentStatus.COMPLETED);
-                payment.setUpdatedAt(LocalDateTime.now());
-                orderService.updateOrderStatus(payment.getOrder().getId(), OrderStatus.PROCESSING);
-                paymentRepository.save(payment);
-                response.put("paymentStatus", paymentStatusStr);
                 redirectUrl = FRONTEND_URL ;
             } catch (Exception e) {
                 logger.error("Failed to update payment status for transaction: {}", vnp_TxnRef, e);
@@ -136,18 +149,35 @@ public class PaymentController {
             String vnp_TxnRef = transactionDetails.get("vnp_TxnRef");
 
             try {
-                Payment payment = paymentRepository.findByTransactionId(vnp_TxnRef)
-                        .orElseThrow(() -> new NoSuchElementException("Payment not found for transaction: " + vnp_TxnRef));
+//                Payment payment = paymentRepository.findByTransactionId(vnp_TxnRef)
+//                        .orElseThrow(() -> new NoSuchElementException("Payment not found for transaction: " + vnp_TxnRef));
+//
+//                if (payment.getStatus() != PaymentStatus.PENDING) {
+//                    logger.info("Payment already processed for transaction: {}", vnp_TxnRef);
+//                } else {
+//                    payment.setStatus(PaymentStatus.FAILED);
+//                    payment.setUpdatedAt(LocalDateTime.now());
+//                    paymentRepository.save(payment);
+//
+//                    orderService.updateOrderStatus(payment.getOrder().getId(), OrderStatus.CANCELLED);
+//                    logger.info("Payment failed for transaction: {}. Payment status set to: {}", vnp_TxnRef, paymentStatusStr);
+//                }
+//                redirectUrl = FRONTEND_URL;
+                List<Payment> payments = paymentRepository.findByTransactionId(vnp_TxnRef);
 
-                if (payment.getStatus() != PaymentStatus.PENDING) {
-                    logger.info("Payment already processed for transaction: {}", vnp_TxnRef);
-                } else {
+                if (payments.isEmpty()) {
+                    throw new NoSuchElementException("Payment not found for transaction: " + vnp_TxnRef);
+                }
+
+                for (Payment payment : payments) {
+                    if (payment.getStatus() != PaymentStatus.PENDING) {
+                        logger.info("Payment already processed for transaction: {}", vnp_TxnRef);
+                        continue;
+                    }
                     payment.setStatus(PaymentStatus.FAILED);
                     payment.setUpdatedAt(LocalDateTime.now());
                     paymentRepository.save(payment);
-
                     orderService.updateOrderStatus(payment.getOrder().getId(), OrderStatus.CANCELLED);
-                    logger.info("Payment failed for transaction: {}. Payment status set to: {}", vnp_TxnRef, paymentStatusStr);
                 }
                 redirectUrl = FRONTEND_URL;
             } catch (Exception e) {

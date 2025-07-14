@@ -65,39 +65,30 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private DiscountRepository discountRepository;
 
+    @Autowired
+    private ProductRepository productRepository;
+
     @Override
     @Transactional
-    public Order createOrder(OrderRequestDTO orderRequest, Long userId)  {
+    public List<Order> createOrder(OrderRequestDTO orderRequest, Long userId) {
         try {
-
+            String tran= vnpayConfig.getRandomNumber(8);
+            // Validate input
+            if (orderRequest.getItems() == null || orderRequest.getItems().isEmpty()) {
+                throw new IllegalArgumentException("Order items cannot be null or empty");
+            }
 
             // Find the user
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new NoSuchElementException("User not found with ID: " + userId));
 
-            // Find the store
-            Store store = storeRepository.findById(orderRequest.getStoreId())
-                    .orElseThrow(() -> new NoSuchElementException("Store not found with ID: " + orderRequest.getStoreId()));
-
-//            Address address= addressRepository.findById(orderRequest.getAddressDTO().getId()).orElseGet(()->{
-//                Address newAddress = new Address();
-//                newAddress.setUser(user);
-//                newAddress.setPhone(orderRequest.getAddressDTO().getPhone());
-//                newAddress.setProvince(orderRequest.getAddressDTO().getProvince());
-//                newAddress.setDistrict(orderRequest.getAddressDTO().getDistrict());
-//                newAddress.setWard(orderRequest.getAddressDTO().getWard());
-//                newAddress.setDefault(false);
-//                newAddress.setAddress(orderRequest.getAddressDTO().getAddress());
-//                return newAddress;
-//            });
+            // Handle address
             Address address;
             AddressDTO addressDTO = orderRequest.getAddressDTO();
             if (addressDTO.getId() != null) {
-                // Existing address: fetch from database
                 address = addressRepository.findById(addressDTO.getId())
                         .orElseThrow(() -> new NoSuchElementException("Address not found with ID: " + addressDTO.getId()));
             } else {
-                // New address: create and save
                 address = new Address();
                 address.setUser(user);
                 address.setPhone(addressDTO.getPhone());
@@ -106,90 +97,142 @@ public class OrderServiceImpl implements OrderService {
                 address.setWard(addressDTO.getWard());
                 address.setAddress(addressDTO.getAddress());
                 address.setDefault(addressDTO.isDefault());
-                address = addressRepository.save(address); // Save to generate ID
+                address = addressRepository.save(address);
             }
 
+            // Handle discount
             Discount discount = Optional.ofNullable(orderRequest.getDiscount_code())
                     .map(code -> discountRepository.findByCode(code)
                             .orElseThrow(() -> new RuntimeException("Discount code not found")))
                     .orElse(null);
-            if(discount!=null) discount.setQuantity(discount.getQuantity()-1);
-            // Create order
-            Order order = new Order();
-            order.setUser(user);
-            order.setStore(store); // Set the store directly from the request
-            order.setDiscount(discount);
 
-            order.setTotalPrice(orderRequest.getTotalAmount());
-            order.setTotalQuantity(orderRequest.getItems().stream()
-                    .mapToInt(OrderItemDTO::getQuantity)
-                    .sum());
-            order.setStatus(OrderStatus.PENDING);
-            order.setCreatedAt(LocalDateTime.now());
-            order.setUpdatedAt(LocalDateTime.now());
-            order.setShippingAddress(address);
+            // Group items by store based on product's store
+            Map<Long, List<OrderItemDTO>> itemsByStore = new HashMap<>();
 
-            // Save order to get ID
-            order = orderRepository.save(order);
-
-            // Create order details and check inventory
-            List<OrderDetail> orderDetails = new ArrayList<>();
             for (OrderItemDTO item : orderRequest.getItems()) {
-                OrderDetail detail = new OrderDetail();
-                detail.setOrder(order);
+                if (item.getVariantId() == null) {
+                    throw new IllegalArgumentException("Variant ID cannot be null for item");
+                }
 
                 ProductVariant variant = productVariantRepository.findById(item.getVariantId())
                         .orElseThrow(() -> new NoSuchElementException("Product variant not found with ID: " + item.getVariantId()));
 
-                // Check if the product is available in the specified store
-                Inventory inventory = inventoryRepository.findByVariantIdAndStoreId(variant.getId(), store.getId())
-                        .orElseThrow(() -> new RuntimeException("Product " + variant.getProduct().getName() +
-                                " (" + variant.getName() + ") is not available in the selected store"));
-
-                // Check if there's enough stock
-                if (inventory.getQuantity() < item.getQuantity()) {
-                    throw new RuntimeException("Not enough stock for product " + variant.getProduct().getName() +
-                            " (" + variant.getName() + "). Available: " + inventory.getQuantity() +
-                            ", Requested: " + item.getQuantity());
+                Product product = variant.getProduct();
+                if (product == null || product.getStore() == null) {
+                    throw new IllegalArgumentException("Product or store not found for variant ID: " + item.getVariantId());
                 }
 
-                // Update inventory
-                inventory.setQuantity(inventory.getQuantity() - item.getQuantity());
-                inventoryRepository.save(inventory);
-
-                detail.setProductVariant(variant);
-                detail.setQuantity(item.getQuantity());
-                detail.setUnitPrice(item.getPrice());
-                detail.setTotalPrice(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
-                orderDetails.add(detail);
+                Long storeId = product.getStore().getId();
+                itemsByStore.computeIfAbsent(storeId, k -> new ArrayList<>()).add(item);
             }
 
-            order.setOrderDetails(orderDetails);
-
-            // Create payment
-            Payment payment = new Payment();
-            payment.setOrder(order);
-            payment.setAmount(orderRequest.getTotalAmount());
-
-            if ("cod".equalsIgnoreCase(orderRequest.getPaymentMethod())) {
-                payment.setPaymentMethod(String.valueOf(PaymentMethod.COD));
-                payment.setStatus(PaymentStatus.PENDING);
-            } else if ("vnpay".equalsIgnoreCase(orderRequest.getPaymentMethod())) {
-                payment.setPaymentMethod(String.valueOf(PaymentMethod.VNPAY));
-                payment.setStatus(PaymentStatus.PENDING);
-                payment.setTransactionId(vnpayConfig.getRandomNumber(8));
-                order.setStatus(OrderStatus.PROCESSING);
+            // Apply discount to first order only or distribute proportionally
+            if (discount != null) {
+                discount.setQuantity(discount.getQuantity() - 1);
             }
 
-            payment.setCreatedAt(LocalDateTime.now());
-            payment.setUpdatedAt(LocalDateTime.now());
+            List<Order> orders = new ArrayList<>();
 
-            order.setPayment(payment);
+            // Create an order for each store
+            boolean isFirstOrder = true;
+            for (Map.Entry<Long, List<OrderItemDTO>> entry : itemsByStore.entrySet()) {
+                Long storeId = entry.getKey();
+                List<OrderItemDTO> storeItems = entry.getValue();
 
-            // Save the complete order
-            order = orderRepository.save(order);
+                // Find the store
+                Store store = storeRepository.findById(storeId)
+                        .orElseThrow(() -> new NoSuchElementException("Store not found with ID: " + storeId));
 
-            // Only clear cart items if they were ordered from the cart
+                // Calculate totals for this store's order
+                BigDecimal storeTotalPrice = storeItems.stream()
+                        .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                int storeTotalQuantity = storeItems.stream()
+                        .mapToInt(OrderItemDTO::getQuantity)
+                        .sum();
+
+                // Create order for this store
+                Order order = new Order();
+                order.setUser(user);
+                order.setStore(store);
+                // Apply discount only to the first order (you can modify this logic as needed)
+                order.setDiscount(isFirstOrder ? discount : null);
+                order.setTotalPrice(storeTotalPrice);
+                order.setTotalQuantity(storeTotalQuantity);
+                order.setStatus(OrderStatus.PENDING);
+                order.setCreatedAt(LocalDateTime.now());
+                order.setUpdatedAt(LocalDateTime.now());
+                order.setShippingAddress(address);
+
+                // Save order to get ID
+                order = orderRepository.save(order);
+
+                // Create order details and check inventory for this store
+                List<OrderDetail> orderDetails = new ArrayList<>();
+                for (OrderItemDTO item : storeItems) {
+                    OrderDetail detail = new OrderDetail();
+                    detail.setOrder(order);
+
+                    ProductVariant variant = productVariantRepository.findById(item.getVariantId())
+                            .orElseThrow(() -> new NoSuchElementException("Product variant not found with ID: " + item.getVariantId()));
+
+                    // Check if the product is available in the specified store
+                    Inventory inventory = inventoryRepository.findByVariantIdAndStoreId(variant.getId(), store.getId())
+                            .orElseThrow(() -> new RuntimeException("Product " + variant.getProduct().getName() +
+                                    " (" + variant.getName() + ") is not available in store " + store.getName()));
+
+                    // Check if there's enough stock
+                    if (inventory.getQuantity() < item.getQuantity()) {
+                        throw new RuntimeException("Not enough stock for product " + variant.getProduct().getName() +
+                                " (" + variant.getName() + ") in store " + store.getName() +
+                                ". Available: " + inventory.getQuantity() + ", Requested: " + item.getQuantity());
+                    }
+
+                    // Update inventory
+                    inventory.setQuantity(inventory.getQuantity() - item.getQuantity());
+                    inventoryRepository.save(inventory);
+
+                    detail.setProductVariant(variant);
+                    detail.setQuantity(item.getQuantity());
+                    detail.setUnitPrice(item.getPrice());
+                    detail.setTotalPrice(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+                    orderDetails.add(detail);
+                }
+
+                order.setOrderDetails(orderDetails);
+
+                // Create payment for this order
+                Payment payment = new Payment();
+                payment.setOrder(order);
+                payment.setAmount(order.getTotalPrice());
+                payment.setCreatedAt(LocalDateTime.now());
+                payment.setUpdatedAt(LocalDateTime.now());
+
+                if ("cod".equalsIgnoreCase(orderRequest.getPaymentMethod())) {
+                    payment.setPaymentMethod(String.valueOf(PaymentMethod.COD));
+                    payment.setStatus(PaymentStatus.PENDING);
+                } else if ("vnpay".equalsIgnoreCase(orderRequest.getPaymentMethod())) {
+                    payment.setPaymentMethod(String.valueOf(PaymentMethod.VNPAY));
+                    payment.setStatus(PaymentStatus.PENDING);
+                    payment.setTransactionId(tran);
+                    // Only set to PROCESSING for VNPay
+                    //order.setStatus(OrderStatus.PROCESSING);
+                }
+
+                order.setPayment(payment);
+
+                // Save the complete order
+                order = orderRepository.save(order);
+                orders.add(order);
+
+                // Send order confirmation email
+                sendEmailService.sendOrderConfirmationEmail(order);
+
+                isFirstOrder = false;
+            }
+
+            // Clear cart items if ordered from cart
             if (orderRequest.isFromCart()) {
                 List<Long> cartItemIds = orderRequest.getItems().stream()
                         .filter(item -> item.getId() != null) // Filter out items without cart IDs
@@ -207,13 +250,12 @@ public class OrderServiceImpl implements OrderService {
                     }
                 }
             }
-            sendEmailService.sendOrderConfirmationEmail(order);
-            return order;
-        }catch (Exception e) {
-            throw  new RuntimeException(e);
+
+            return orders;
+        } catch (Exception e) {
+            throw new RuntimeException("Error creating order: " + e.getMessage(), e);
         }
     }
-
     @Override
     public OrderDTO getOrderById(Long orderId) {
         Order order = orderRepository.findById(orderId)
@@ -234,7 +276,13 @@ public class OrderServiceImpl implements OrderService {
         Page<Order> orders = orderRepository.findByUserId(userId, pageable);
         return orders.map(this::convertToDTO);
     }
-
+    @Override
+    public List<OrderDTO> getAllOrderByUserId( Long userId) {
+        List<Order> orders = orderRepository.findAllByUserId( userId);
+        return orders.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
     @Override
     public List<OrderDTO> getOrdersByStoreId(Long storeId) {
         List<Order> orders = orderRepository.findByStoreId(storeId);
@@ -352,7 +400,6 @@ public class OrderServiceImpl implements OrderService {
 
     // Helper method to validate order status transitions
     private void validateOrderStatusTransition(OrderStatus currentStatus, OrderStatus newStatus) {
-        // Kiểm tra luồng trạng thái hợp lệ
         switch (currentStatus) {
             case PENDING:
                 if (newStatus != OrderStatus.PROCESSING && newStatus != OrderStatus.CANCELLED) {

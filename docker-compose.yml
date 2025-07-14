@@ -5,9 +5,9 @@ services:
     build: .
     restart: always
     ports:
-      - "8169:8169"
+      - "8080:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://192.168.1.17:5432/shoes_shop
+      SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:5432/shoes_shop
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: minhthinh3110
     networks:

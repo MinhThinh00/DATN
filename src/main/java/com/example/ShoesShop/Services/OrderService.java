@@ -12,14 +12,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface OrderService {
-    Order createOrder(OrderRequestDTO orderRequest, Long userId);
+    List<Order> createOrder(OrderRequestDTO orderRequest, Long userId);
 
     OrderDTO getOrderById(Long orderId);
     
     List<OrderDTO> getOrdersByUserId(Long userId);
     
     Page<OrderDTO> getOrdersByUserId(Long userId, Pageable pageable);
-    
+
+    List<OrderDTO> getAllOrderByUserId(Long userId);
+
     List<OrderDTO> getOrdersByStoreId(Long storeId);
     
     Page<OrderDTO> getOrdersByStoreId(Long storeId, Pageable pageable);
